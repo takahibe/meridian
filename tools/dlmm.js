@@ -389,18 +389,22 @@ async function getPoolMetadata(poolAddress) {
     const data = await res.json();
     const tokenX = data?.token_x?.symbol || null;
     const tokenY = data?.token_y?.symbol || null;
+    const mintX = data?.mint_x || data?.token_x?.address || data?.token_x?.mint || null;
+    const mintY = data?.mint_y || data?.token_y?.address || data?.token_y?.mint || null;
     const pair = data?.name || (tokenX && tokenY ? `${tokenX}-${tokenY}` : null);
     const meta = {
       address: data?.address || key,
       name: pair,
       token_x_symbol: tokenX,
       token_y_symbol: tokenY,
+      mint_x: mintX,
+      mint_y: mintY,
     };
     poolMetadataCache.set(key, meta);
     return meta;
   } catch (error) {
     log("pool_meta_warn", `Pool metadata lookup failed for ${key.slice(0, 8)}: ${error.message}`);
-    const fallback = { address: key, name: null, token_x_symbol: null, token_y_symbol: null };
+    const fallback = { address: key, name: null, token_x_symbol: null, token_y_symbol: null, mint_x: null, mint_y: null };
     poolMetadataCache.set(key, fallback);
     return fallback;
   }
@@ -1365,7 +1369,14 @@ export async function closePosition({ position_address, reason }) {
       const livePosition = livePositions?.positions?.find((position) => position.position === position_address);
       const closeFromBinId = livePosition?.lower_bin ?? tracked?.bin_range?.min ?? -887272;
       const closeToBinId = livePosition?.upper_bin ?? tracked?.bin_range?.max ?? 887272;
-      const closeOutput = "allToken1";
+      // Pick zap-out target side based on which mint is SOL (allToken0=tokenX, allToken1=tokenY)
+      const SOL_MINT = "So11111111111111111111111111111111111111112";
+      let closeOutput = "allToken1";
+      if (poolMeta.mint_x === SOL_MINT)      closeOutput = "allToken0";
+      else if (poolMeta.mint_y === SOL_MINT) closeOutput = "allToken1";
+      else if (poolMeta.mint_x || poolMeta.mint_y) {
+        log("close_warn", `Pool ${poolAddress.slice(0, 8)} has no SOL side (${poolMeta.token_x_symbol}/${poolMeta.token_y_symbol}) — zapping to tokenY`);
+      }
 
       const quotes = await meridianJson("/execution/zap-out/quotes", {
         method: "POST",
@@ -1377,16 +1388,20 @@ export async function closePosition({ position_address, reason }) {
         }),
       });
 
+      const rawSlippage = Number(config.management.closeSlippageBps);
+      const closeSlippageBps = Number.isFinite(rawSlippage) && rawSlippage > 0
+        ? Math.min(10000, Math.max(1, Math.round(rawSlippage)))
+        : 500;
       const order = await meridianJson("/execution/zap-out/order", {
         method: "POST",
         headers: getMeridianHeaders(),
         body: JSON.stringify({
           agentId: config.hiveMind.agentId || "agent-local",
-          idempotencyKey: `close:${position_address}:10000`,
+          idempotencyKey: `close:${position_address}:10000:${closeSlippageBps}`,
           positionId: position_address,
           owner: wallet.publicKey.toString(),
           bps: 10000,
-          slippageBps: 5000,
+          slippageBps: closeSlippageBps,
           output: closeOutput,
           provider: "OKX",
           type: "meteora",
