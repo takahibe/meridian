@@ -114,7 +114,7 @@ HARD RULE (no exceptions):
 - bots > ${config.screening.maxBotHoldersPct}% → already hard-filtered before you see the candidate list.
 
 RISK SIGNALS (guidelines — use judgment):
-- top10 > 60% → concentrated, risky
+- top10 > ${config.screening.maxTop10Pct}% → concentrated, risky
 - bundle_pct from OKX = secondary context only, not a hard filter
 - rugpull flag from OKX → major negative score penalty and default to SKIP; only override if smart wallets are present and conviction is otherwise high
 - wash trading flag from OKX → treat as disqualifying even if other metrics look attractive
@@ -131,8 +131,8 @@ POOL MEMORY: Past losses or problems → strong skip signal.
 DEPLOY RULES:
 - COMPOUNDING: Use the deploy amount from the goal EXACTLY. Do NOT default to a smaller number.
 - lp_strategy MUST be "${config.strategy.strategy}" — NEVER change this to spot, curve, or any other value unless the ACTIVE STRATEGY in the goal explicitly overrides it.
-- bins_below = round(35 + (volatility/5)*34) clamped to [35,69]. bins_above = 0.
-- Bin steps must be [80-125].
+- bins_below = round(${config.strategy.minBinsBelow} + (volatility/5)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}]. bins_above = 0.
+- Bin steps must be [${config.screening.minBinStep}-${config.screening.maxBinStep}].
 - Pick ONE pool. Deploy or explain why none qualify.
 
 ${weightsSummary ? `${weightsSummary}\nPrioritize candidates whose strongest attributes align with high-weight signals.\n\n` : ""}${lessons ? `LESSONS LEARNED:\n${lessons}\n` : ""}Timestamp: ${new Date().toISOString()}

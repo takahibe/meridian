@@ -17,6 +17,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, "user-config.json");
+const GMGN_CONFIG_PATH = path.join(__dirname, "gmgn-config.json");
 const DEFAULT_HIVEMIND_URL = "https://api.agentmeridian.xyz";
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -202,11 +203,20 @@ const PRESETS = {
 };
 
 const EXAMPLE_DEFAULTS = JSON.parse(fs.readFileSync(path.join(__dirname, "user-config.example.json"), "utf8"));
+const GMGN_EXAMPLE_DEFAULTS = JSON.parse(fs.readFileSync(path.join(__dirname, "gmgn-config.example.json"), "utf8"));
 const existing = fs.existsSync(CONFIG_PATH)
   ? JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"))
   : {};
+const existingGmgn = fs.existsSync(GMGN_CONFIG_PATH)
+  ? JSON.parse(fs.readFileSync(GMGN_CONFIG_PATH, "utf8"))
+  : {};
 
-function defaultFor(key, presetDefaults = {}) {
+function defaultFor(field, presetDefaults = {}) {
+  const { key, configFile } = field;
+  if (configFile === "gmgn") {
+    if (existingGmgn[key] !== undefined) return existingGmgn[key];
+    return GMGN_EXAMPLE_DEFAULTS[key];
+  }
   if (existing[key] !== undefined) return existing[key];
   if (key === "hiveMindUrl") return DEFAULT_HIVEMIND_URL;
   if (presetDefaults[key] !== undefined) return presetDefaults[key];
@@ -241,12 +251,17 @@ const FIELD_SECTIONS = [
         { key: "spot", label: "spot" },
         { key: "curve", label: "curve" },
       ]},
-      { key: "binsBelow", label: "Bins below active price", type: "number", min: 1 },
+      { key: "minBinsBelow", label: "Min bins below active price", type: "number", min: 1 },
+      { key: "maxBinsBelow", label: "Max bins below active price", type: "number", min: 1 },
     ],
   },
   {
     title: "Screening Filters",
     fields: [
+      { key: "screeningSource", label: "Screening source", type: "choice", choices: [
+        { key: "meteora", label: "meteora — legacy Meteora pool discovery" },
+        { key: "gmgn", label: "gmgn — GMGN token scan then Meteora DLMM pool match" },
+      ]},
       { key: "timeframe", label: "Discovery timeframe", type: "choice", choices: ["30m", "1h", "4h", "12h", "24h"].map((key) => ({ key, label: key })) },
       { key: "category", label: "Discovery category", type: "string" },
       { key: "excludeHighSupplyConcentration", label: "Exclude high supply concentration? (true/false)", type: "boolean" },
@@ -277,6 +292,34 @@ const FIELD_SECTIONS = [
       { key: "minTokenAgeHours", label: "Min token age hours (or null)", type: "number", min: 0, nullable: true },
       { key: "maxTokenAgeHours", label: "Max token age hours (or null)", type: "number", min: 0, nullable: true },
       { key: "athFilterPct", label: "ATH filter pct (or null)", type: "number", nullable: true },
+    ],
+  },
+  {
+    title: "GMGN Screening",
+    fields: [
+      { key: "apiKey", configFile: "gmgn", label: "GMGN API key", type: "string", preserveExistingMasked: true },
+      { key: "interval", configFile: "gmgn", label: "GMGN trending interval", type: "choice", choices: ["1m", "5m", "1h", "6h", "24h"].map((key) => ({ key, label: key })) },
+      { key: "orderBy", configFile: "gmgn", label: "GMGN rank sort field", type: "string" },
+      { key: "limit", configFile: "gmgn", label: "GMGN rank limit", type: "number", min: 1 },
+      { key: "enrichLimit", configFile: "gmgn", label: "GMGN enrich shortlist", type: "number", min: 1 },
+      { key: "requestDelayMs", configFile: "gmgn", label: "GMGN request delay ms", type: "number", min: 0 },
+      { key: "maxRetries", configFile: "gmgn", label: "GMGN max retries", type: "number", min: 0 },
+      { key: "minMcap", configFile: "gmgn", label: "GMGN min market cap", type: "number", min: 0 },
+      { key: "maxMcap", configFile: "gmgn", label: "GMGN max market cap", type: "number", min: 0 },
+      { key: "minVolume", configFile: "gmgn", label: "GMGN min 5m volume", type: "number", min: 0 },
+      { key: "minHolders", configFile: "gmgn", label: "GMGN min holders", type: "number", min: 0 },
+      { key: "minTokenAgeHours", configFile: "gmgn", label: "GMGN min token age hours", type: "number", min: 0 },
+      { key: "maxTokenAgeHours", configFile: "gmgn", label: "GMGN max token age hours", type: "number", min: 0 },
+      { key: "athFilterPct", configFile: "gmgn", label: "GMGN ATH filter pct (or null)", type: "number", nullable: true },
+      { key: "maxBundlerRate", configFile: "gmgn", label: "GMGN max bundler rate (0-1)", type: "number", min: 0 },
+      { key: "maxFreshWalletRate", configFile: "gmgn", label: "GMGN max fresh wallet rate (0-1)", type: "number", min: 0 },
+      { key: "maxDevTeamHoldRate", configFile: "gmgn", label: "GMGN max dev team hold rate (0-1)", type: "number", min: 0 },
+      { key: "preferredKolNames", configFile: "gmgn", label: "GMGN preferred KOL names", type: "list" },
+      { key: "preferredKolMinHoldPct", configFile: "gmgn", label: "GMGN preferred KOL min holding %", type: "number", min: 0 },
+      { key: "requireKol", configFile: "gmgn", label: "Require active KOL holder? (true/false)", type: "boolean" },
+      { key: "minKolCount", configFile: "gmgn", label: "Min active KOL holders", type: "number", min: 0 },
+      { key: "minSmartDegenCount", configFile: "gmgn", label: "Min smart money count", type: "number", min: 0 },
+      { key: "minTotalFeeSol", configFile: "gmgn", label: "Min GMGN total fee SOL", type: "number", min: 0 },
     ],
   },
   {
@@ -359,7 +402,7 @@ const FIELD_SECTIONS = [
 ];
 
 async function askField(field, presetDefaults) {
-  const defaultValue = defaultFor(field.key, presetDefaults);
+  const defaultValue = defaultFor(field, presetDefaults);
 
   switch (field.type) {
     case "boolean":
@@ -406,11 +449,18 @@ const updates = {
   preset: presetChoice.key,
   hiveMindUrl: DEFAULT_HIVEMIND_URL,
 };
+const gmgnUpdates = {
+  ...existingGmgn,
+};
 
 for (const section of FIELD_SECTIONS) {
   console.log(`\n── ${section.title} ────────────────────────────────`);
   for (const field of section.fields) {
-    updates[field.key] = await askField(field, presetDefaults);
+    if (field.configFile === "gmgn") {
+      gmgnUpdates[field.key] = await askField(field, presetDefaults);
+    } else {
+      updates[field.key] = await askField(field, presetDefaults);
+    }
   }
 }
 
@@ -421,17 +471,19 @@ rl.close();
 if (!updates.walletKey && existing.walletKey) updates.walletKey = existing.walletKey;
 if (!updates.llmApiKey && existing.llmApiKey) updates.llmApiKey = existing.llmApiKey;
 if (!updates.hiveMindApiKey && existing.hiveMindApiKey) updates.hiveMindApiKey = existing.hiveMindApiKey;
+if (!gmgnUpdates.apiKey && existingGmgn.apiKey) gmgnUpdates.apiKey = existingGmgn.apiKey;
 if (existing.agentId && !updates.agentId) updates.agentId = existing.agentId;
 updates.hiveMindUrl = DEFAULT_HIVEMIND_URL;
 
 fs.writeFileSync(CONFIG_PATH, JSON.stringify(updates, null, 2));
+fs.writeFileSync(GMGN_CONFIG_PATH, JSON.stringify(gmgnUpdates, null, 2));
 
 console.log(`
 ╔═══════════════════════════════════════════╗
 ║           Configuration Saved             ║
 ╚═══════════════════════════════════════════╝
 
-Setup updated your existing user-config.json by merge, so unrelated keys were preserved.
+Setup updated your existing user-config.json and gmgn-config.json by merge, so unrelated keys were preserved.
 
 Highlights:
   Preset:      ${updates.preset}
@@ -444,6 +496,7 @@ Highlights:
   Agent ID:    ${updates.agentId || "(auto-generate on startup)"}
   HiveMind:    ${DEFAULT_HIVEMIND_URL}${updates.hiveMindApiKey ? " (API key configured)" : " (API key not set)"}
   Pull mode:   ${updates.hiveMindPullMode}
+  GMGN:        ${updates.screeningSource === "gmgn" ? "enabled" : "configured but not selected"}${gmgnUpdates.apiKey ? " (API key configured)" : " (API key not set)"}
 
 Run "npm start" to launch the agent.
 `);

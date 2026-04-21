@@ -445,7 +445,7 @@ export async function deployPosition({
 }) {
   pool_address = normalizeMint(pool_address);
   const activeStrategy = strategy || config.strategy.strategy;
-  let activeBinsBelow = bins_below ?? config.strategy.binsBelow;
+  let activeBinsBelow = bins_below ?? config.strategy.minBinsBelow;
   let activeBinsAbove = bins_above ?? 0;
 
   if (isPoolOnCooldown(pool_address)) {
