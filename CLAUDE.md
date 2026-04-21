@@ -120,15 +120,16 @@ Before `deploy_position` executes:
 
 ## bins_below Calculation (SCREENER)
 
-Linear formula based on pool volatility (set in screener prompt, `index.js`):
+Linear formula based on pool volatility, parameterized by `config.strategy.minBinsBelow` / `maxBinsBelow` (set in screener prompt, `index.js` / `prompt.js`):
 
 ```
-bins_below = round(35 + (volatility / 5) * 34), clamped to [35, 69]
+bins_below = round(minBinsBelow + (volatility / 5) * (maxBinsBelow - minBinsBelow)),
+             clamped to [minBinsBelow, maxBinsBelow]
 ```
 
-- Low volatility (0) → 35 bins
-- High volatility (5+) → 69 bins
-- Any value in between is valid (continuous, not tiered)
+Defaults: `minBinsBelow=35`, `maxBinsBelow=69`. Low volatility (0) → min; high volatility (5+) → max; continuous between.
+
+Legacy key `config.strategy.binsBelow` was renamed to `minBinsBelow` + `maxBinsBelow`. `tools/dlmm.js` falls back to `minBinsBelow` when `bins_below` is not passed.
 
 ---
 
