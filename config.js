@@ -70,6 +70,7 @@ export const config = {
     minTokenAgeHours:   u.minTokenAgeHours   ?? null, // null = no minimum
     maxTokenAgeHours:   u.maxTokenAgeHours   ?? null, // null = no maximum
     athFilterPct:       u.athFilterPct       ?? null, // e.g. -20 = only deploy if price is >= 20% below ATH
+    maxVolatility:      u.maxVolatility      ?? 5.0,  // evolved by lessons system
   },
 
   // ─── Position Management ────────────────
@@ -91,6 +92,13 @@ export const config = {
     takeProfitPct:         u.takeProfitPct         ?? u.takeProfitFeePct ?? 5,
     minFeePerTvl24h:       u.minFeePerTvl24h       ?? 7,
     minAgeBeforeYieldCheck: u.minAgeBeforeYieldCheck ?? 60, // minutes before low yield can trigger close
+    tokenCooldownAfterLosses: u.tokenCooldownAfterLosses ?? 3,  // cross-pool losses before global token cooldown
+    tokenGlobalCooldownHours: u.tokenGlobalCooldownHours ?? 24, // hours for global token cooldown
+    // Spot-add strategy: add a spot position to confirmed bid_ask pools
+    spotAddEnabled:            u.spotAddEnabled            ?? true,
+    spotAddMinAgeMinutes:      u.spotAddMinAgeMinutes      ?? 15,   // min age before spot add is considered
+    spotAddFeeSpikeMultiplier: u.spotAddFeeSpikeMultiplier ?? 2.0,  // fee/TVL must be Nx deploy-time value
+    spotAddSizePct:            u.spotAddSizePct            ?? 0.5,  // fraction of original deploy amount
     minSolToOpen:          u.minSolToOpen          ?? 0.55,
     deployAmountSol:       u.deployAmountSol       ?? 0.5,
     gasReserve:            u.gasReserve            ?? 0.2,
@@ -237,6 +245,7 @@ export function reloadScreeningThresholds() {
     if (fresh.minTokenAgeHours  !== undefined) s.minTokenAgeHours = fresh.minTokenAgeHours;
     if (fresh.maxTokenAgeHours  !== undefined) s.maxTokenAgeHours = fresh.maxTokenAgeHours;
     if (fresh.athFilterPct      !== undefined) s.athFilterPct     = fresh.athFilterPct;
+    if (fresh.maxVolatility     != null) s.maxVolatility     = fresh.maxVolatility;
     if (fresh.maxBundlePct      != null) s.maxBundlePct     = fresh.maxBundlePct;
     if (fresh.avoidPvpSymbols   !== undefined) s.avoidPvpSymbols = fresh.avoidPvpSymbols;
     if (fresh.blockPvpSymbols   !== undefined) s.blockPvpSymbols = fresh.blockPvpSymbols;

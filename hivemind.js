@@ -117,22 +117,39 @@ function buildUrl(pathname, query = {}) {
   return url.toString();
 }
 
-async function requestJson(pathname, { method = "GET", body = null, query = {} } = {}) {
+async function requestJson(pathname, { method = "GET", body = null, query = {}, retries = 2 } = {}) {
   if (!isHiveMindEnabled()) return null;
-  const response = await fetch(buildUrl(pathname, query), {
-    method,
-    headers: {
-      accept: "application/json",
-      "x-api-key": getApiKey(),
-      ...(body != null ? { "content-type": "application/json" } : {}),
-    },
-    body: body != null ? JSON.stringify(body) : undefined,
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(payload?.error || `HiveMind ${response.status}`);
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(buildUrl(pathname, query), {
+        method,
+        headers: {
+          accept: "application/json",
+          "x-api-key": getApiKey(),
+          ...(body != null ? { "content-type": "application/json" } : {}),
+        },
+        body: body != null ? JSON.stringify(body) : undefined,
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        // Retry on 5xx server errors, not 4xx client errors
+        if (response.status >= 500 && attempt < retries) {
+          await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+          continue;
+        }
+        throw new Error(payload?.error || `HiveMind ${response.status}`);
+      }
+      return payload;
+    } catch (err) {
+      // Retry on network errors (ECONNREFUSED, fetch failures)
+      const isNetworkError = err.cause?.code === "ECONNREFUSED" || err.message?.includes("fetch failed");
+      if (isNetworkError && attempt < retries) {
+        await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+        continue;
+      }
+      throw err;
+    }
   }
-  return payload;
 }
 
 function normalizeSharedLesson(lesson) {

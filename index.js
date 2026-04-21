@@ -7,7 +7,7 @@ import { getMyPositions, closePosition, getActiveBin } from "./tools/dlmm.js";
 import { getWalletBalances } from "./tools/wallet.js";
 import { getTopCandidates } from "./tools/screening.js";
 import { config, reloadScreeningThresholds, computeDeployAmount } from "./config.js";
-import { evolveThresholds, getPerformanceSummary } from "./lessons.js";
+import { evolveThresholds, getPerformanceSummary, getRecentWinRate } from "./lessons.js";
 import { executeTool, registerCronRestarter } from "./tools/executor.js";
 import {
   startPolling,
@@ -23,9 +23,9 @@ import {
   createLiveMessage,
 } from "./telegram.js";
 import { generateBriefing } from "./briefing.js";
-import { getLastBriefingDate, setLastBriefingDate, getTrackedPosition, setPositionInstruction, updatePnlAndCheckExits, queuePeakConfirmation, resolvePendingPeak, queueTrailingDropConfirmation, resolvePendingTrailingDrop } from "./state.js";
+import { getLastBriefingDate, setLastBriefingDate, getTrackedPosition, setPositionInstruction, updatePnlAndCheckExits, queuePeakConfirmation, resolvePendingPeak, queueTrailingDropConfirmation, resolvePendingTrailingDrop, markSpotAdded, hasSpotBeenAdded, clearSpotAdd } from "./state.js";
 import { getActiveStrategy } from "./strategy-library.js";
-import { recordPositionSnapshot, recallForPool, addPoolNote } from "./pool-memory.js";
+import { recordPositionSnapshot, recallForPool, addPoolNote, getRecentSnapshots } from "./pool-memory.js";
 import { checkSmartWalletsOnPool } from "./smart-wallets.js";
 import { getTokenNarrative, getTokenInfo } from "./tools/token.js";
 import { stageSignals } from "./signal-tracker.js";
@@ -211,10 +211,24 @@ export async function runManagementCycle({ silent = false } = {}) {
       return mgmtReport;
     }
 
+    // Auto-scale management interval based on average position volatility
+    {
+      const volArr = positions.map((p) => p.volatility).filter((v) => v != null && v > 0);
+      if (volArr.length > 0) {
+        const avgVol = volArr.reduce((s, v) => s + v, 0) / volArr.length;
+        const targetMin = avgVol >= 3.0 ? 5 : avgVol >= 1.5 ? 7 : 10;
+        if (targetMin !== config.schedule.managementIntervalMin) {
+          config.schedule.managementIntervalMin = targetMin;
+          startCronJobs();
+          log("cron", `Management interval auto-scaled to ${targetMin}min (avg volatility: ${avgVol.toFixed(1)})`);
+        }
+      }
+    }
+
     // Snapshot + load pool memory
     const positionData = positions.map((p) => {
       recordPositionSnapshot(p.pool, p);
-      return { ...p, recall: recallForPool(p.pool) };
+      return { ...p, recall: recallForPool(p.pool), snapshots: getRecentSnapshots(p.pool, 6) };
     });
 
     // JS trailing TP check
@@ -266,6 +280,62 @@ export async function runManagementCycle({ silent = false } = {}) {
         continue;
       }
       actionMap.set(p.position, { action: "STAY" });
+    }
+
+    // ── Spot-add evaluation ──────────────────────────────────────────
+    // For each bid_ask position that meets the trigger, add a spot position (once per pool).
+    if (config.management.spotAddEnabled) {
+      for (const p of positionData) {
+        const tracked = getTrackedPosition(p.position);
+        if (!tracked || tracked.strategy !== "bid_ask") continue;
+        if (hasSpotBeenAdded(p.pool)) continue;
+        if (actionMap.get(p.position)?.action === "CLOSE") continue; // don't add to dying position
+
+        const ageMin = p.age_minutes ?? 0;
+        if (ageMin < config.management.spotAddMinAgeMinutes) continue;
+
+        const deployFee = tracked.fee_tvl_ratio ?? tracked.initial_fee_tvl_24h ?? null;
+        const currentFee = p.fee_per_tvl_24h ?? null;
+        const feeSpiked = deployFee != null && currentFee != null &&
+          currentFee >= deployFee * config.management.spotAddFeeSpikeMultiplier;
+
+        const smartWalletsPresent = await checkSmartWalletsOnPool({ pool_address: p.pool })
+          .then(r => (r?.in_pool?.length ?? 0) > 0).catch(() => false);
+
+        if (!feeSpiked && !smartWalletsPresent) continue;
+
+        const spotAmount = parseFloat(((tracked.amount_sol ?? config.management.deployAmountSol) * config.management.spotAddSizePct).toFixed(3));
+        const wallet = await getWalletBalances().catch(() => null);
+        if (!wallet || wallet.sol < spotAmount + config.management.gasReserve) {
+          log("cron", `Spot-add skipped for ${p.pair} — insufficient SOL (${wallet?.sol ?? 0} < ${spotAmount + config.management.gasReserve})`);
+          continue;
+        }
+
+        const triggerReason = feeSpiked
+          ? `fee/TVL ${currentFee}% ≥ ${deployFee}% × ${config.management.spotAddFeeSpikeMultiplier} (deploy-time)`
+          : "smart wallets present";
+        log("cron", `Spot-add triggered for ${p.pair} — ${triggerReason}`);
+
+        try {
+          const result = await executeTool("deploy_position", {
+            pool_address: p.pool,
+            lp_strategy: "spot",
+            amount_y: spotAmount,
+            amount_x: 0,
+            bins_below: tracked.bin_range?.bins_below ?? 50,
+            bins_above: 0,
+            allow_spot_add: true,
+          });
+          if (result?.position) {
+            markSpotAdded(p.pool);
+            log("cron", `Spot-add SUCCESS for ${p.pair} — ${spotAmount} SOL spot position opened (${result.position.slice(0, 8)})`);
+          } else {
+            log("cron", `Spot-add FAILED for ${p.pair}: ${result?.error || "no position returned"}`);
+          }
+        } catch (e) {
+          log("cron_error", `Spot-add error for ${p.pair}: ${e.message}`);
+        }
+      }
     }
 
     // ── Build JS report ──────────────────────────────────────────────
@@ -421,7 +491,17 @@ export async function runScreeningCycle({ silent = false } = {}) {
   try {
     // Reuse pre-fetched balance — no extra RPC call needed
     const currentBalance = preBalance;
-    const deployAmount = computeDeployAmount(currentBalance.sol);
+    const baseDeployAmount = computeDeployAmount(currentBalance.sol);
+    // Adaptive sizing: reduce by 30% if recent win rate is poor (< 30% over last 10 positions)
+    const recentWinRate = getRecentWinRate(10);
+    const drawdownMultiplier = (recentWinRate != null && recentWinRate < 0.30) ? 0.70 : 1.0;
+    const deployAmount = Math.max(
+      parseFloat((baseDeployAmount * drawdownMultiplier).toFixed(2)),
+      config.management.deployAmountSol
+    );
+    if (drawdownMultiplier < 1.0) {
+      log("cron", `Adaptive sizing: reduced deploy ${baseDeployAmount} → ${deployAmount} SOL (win rate ${(recentWinRate * 100).toFixed(0)}% < 30%, floor: ${config.management.deployAmountSol})`);
+    }
     log("cron", `Computed deploy amount: ${deployAmount} SOL (wallet: ${currentBalance.sol} SOL)`);
 
     // Load active strategy
@@ -453,9 +533,9 @@ export async function runScreeningCycle({ silent = false } = {}) {
       await new Promise(r => setTimeout(r, 150)); // avoid 429s
     }
 
-    // Hard filters after token recon — block launchpads and excessive Jupiter bot holders
+    // Hard filters after token recon — block launchpads, bot holders, top-10 concentration, strategy criteria
     const filteredOut = [];
-    const passing = allCandidates.filter(({ pool, ti }) => {
+    const passing = allCandidates.filter(({ pool, sw, ti }) => {
       const launchpad = ti?.launchpad ?? null;
       if (launchpad && config.screening.allowedLaunchpads?.length > 0 && !config.screening.allowedLaunchpads.includes(launchpad)) {
         log("screening", `Skipping ${pool.name} — launchpad ${launchpad} not in allow-list`);
@@ -473,6 +553,39 @@ export async function runScreeningCycle({ silent = false } = {}) {
         log("screening", `Bot-holder filter: dropped ${pool.name} — bots ${botPct}% > ${maxBotHoldersPct}%`);
         filteredOut.push({ name: pool.name, reason: `bot holders ${botPct}% > ${maxBotHoldersPct}%` });
         return false;
+      }
+      // Top-10 holder concentration hard filter
+      const top10Pct = parseFloat(ti?.audit?.top_holders_pct ?? "0") || 0;
+      const maxTop10Pct = config.screening.maxTop10Pct;
+      if (top10Pct > 0 && maxTop10Pct != null && top10Pct > maxTop10Pct) {
+        log("screening", `Top-10 filter: dropped ${pool.name} — top10 ${top10Pct}% > ${maxTop10Pct}%`);
+        filteredOut.push({ name: pool.name, reason: `top 10 holders ${top10Pct}% > ${maxTop10Pct}%` });
+        return false;
+      }
+      // Active strategy token_criteria enforcement
+      const tc = activeStrategy?.token_criteria;
+      if (tc) {
+        if (tc.min_mcap != null && pool.mcap != null && pool.mcap < tc.min_mcap) {
+          log("screening", `Strategy filter: dropped ${pool.name} — mcap $${pool.mcap} < strategy min $${tc.min_mcap}`);
+          filteredOut.push({ name: pool.name, reason: `mcap $${pool.mcap} < strategy min_mcap $${tc.min_mcap}` });
+          return false;
+        }
+        if (tc.min_age_days != null && pool.token_age_hours != null) {
+          const ageDays = pool.token_age_hours / 24;
+          if (ageDays < tc.min_age_days) {
+            log("screening", `Strategy filter: dropped ${pool.name} — age ${ageDays.toFixed(1)}d < strategy min ${tc.min_age_days}d`);
+            filteredOut.push({ name: pool.name, reason: `age ${ageDays.toFixed(1)}d < strategy min_age_days ${tc.min_age_days}d` });
+            return false;
+          }
+        }
+        if (tc.requires_kol === true) {
+          const hasKol = pool.kol_in_clusters || (sw?.in_pool?.length > 0);
+          if (!hasKol) {
+            log("screening", `Strategy filter: dropped ${pool.name} — requires KOL presence, none found`);
+            filteredOut.push({ name: pool.name, reason: "strategy requires_kol: no KOL presence" });
+            return false;
+          }
+        }
       }
       return true;
     });
@@ -819,10 +932,14 @@ function getDeterministicCloseRule(position, managementConfig) {
   if (!pnlSuspect && position.pnl_pct != null && position.pnl_pct >= managementConfig.takeProfitPct) {
     return { action: "CLOSE", rule: 2, reason: "take profit" };
   }
+  // Scale OOR bin threshold by bin_step so it represents a consistent % price move.
+  // bin_step=100 (1%/bin) → threshold unchanged. bin_step=80 → wider tolerance. bin_step=125 → tighter.
+  const binStep = position.bin_step ?? 100;
+  const oorBinThreshold = Math.round(managementConfig.outOfRangeBinsToClose * (100 / binStep));
   if (
     position.active_bin != null &&
     position.upper_bin != null &&
-    position.active_bin > position.upper_bin + managementConfig.outOfRangeBinsToClose
+    position.active_bin > position.upper_bin + oorBinThreshold
   ) {
     return { action: "CLOSE", rule: 3, reason: "pumped far above range" };
   }
@@ -837,9 +954,18 @@ function getDeterministicCloseRule(position, managementConfig) {
   if (
     position.fee_per_tvl_24h != null &&
     position.fee_per_tvl_24h < managementConfig.minFeePerTvl24h &&
-    (position.age_minutes ?? 0) >= 60
+    (position.age_minutes ?? 0) >= (managementConfig.minAgeBeforeYieldCheck ?? 60)
   ) {
-    return { action: "CLOSE", rule: 5, reason: "low yield" };
+    // Confirm with recent snapshots: only close if fees are truly stagnant (< $0.10 growth over last 3 cycles)
+    const snaps = position.snapshots || [];
+    const feesStagnant = snaps.length < 3 || (() => {
+      const recent = snaps.slice(-3);
+      const feeGrowth = (recent[recent.length - 1].unclaimed_fees_usd ?? 0) - (recent[0].unclaimed_fees_usd ?? 0);
+      return feeGrowth < 0.10;
+    })();
+    if (feesStagnant) {
+      return { action: "CLOSE", rule: 5, reason: "low yield" };
+    }
   }
   return null;
 }
@@ -1173,6 +1299,7 @@ function formatHelpText() {
     "/set <n> <note> — set note/instruction on position",
     "/config — show important runtime config",
     "/settings — button menu for common config",
+    "/keys — list all settable config keys",
     "/setcfg <key> <value> — update persisted config",
     "/screen — refresh deterministic candidate list",
     "/candidates — show latest cached candidates",
@@ -1311,6 +1438,44 @@ async function telegramHandler(msg) {
 
   if (text === "/config") {
     await sendMessage(formatConfigSnapshot()).catch(() => {});
+    return;
+  }
+
+  if (text === "/keys") {
+    const msg = [
+      "Settable config keys (use /setcfg key value or tell the bot):",
+      "",
+      "SCREENING",
+      "minFeeActiveTvlRatio, minTvl, maxTvl, minVolume, minOrganic, minQuoteOrganic",
+      "minHolders, minMcap, maxMcap, minBinStep, maxBinStep, timeframe, category",
+      "minTokenFeesSol, maxBundlePct, maxBotHoldersPct, maxTop10Pct, maxVolatility",
+      "minTokenAgeHours, maxTokenAgeHours, athFilterPct, blockedLaunchpads",
+      "avoidPvpSymbols, blockPvpSymbols, excludeHighSupplyConcentration",
+      "",
+      "MANAGEMENT",
+      "deployAmountSol, gasReserve, positionSizePct, minSolToOpen",
+      "stopLossPct, takeProfitPct, trailingTakeProfit, trailingTriggerPct, trailingDropPct",
+      "outOfRangeWaitMinutes, outOfRangeBinsToClose, oorCooldownHours, oorCooldownTriggerCount",
+      "minFeePerTvl24h, minAgeBeforeYieldCheck, minClaimAmount, autoSwapAfterClaim",
+      "spotAddEnabled, spotAddMinAgeMinutes, spotAddFeeSpikeMultiplier, spotAddSizePct",
+      "tokenCooldownAfterLosses, tokenGlobalCooldownHours",
+      "",
+      "RISK",
+      "maxPositions, maxDeployAmount",
+      "",
+      "SCHEDULE",
+      "managementIntervalMin, screeningIntervalMin",
+      "",
+      "MODELS",
+      "managementModel, screeningModel, generalModel, temperature, maxTokens",
+      "",
+      "STRATEGY",
+      "strategy (bid_ask/spot/curve), binsBelow",
+      "",
+      "SYSTEM",
+      "dryRun",
+    ].join("\n");
+    await sendMessage(msg).catch(() => {});
     return;
   }
 

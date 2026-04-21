@@ -151,6 +151,39 @@ export function minutesOutOfRange(position_address) {
 }
 
 /**
+ * Mark that a spot position has been added to a pool (prevents double-adding).
+ */
+export function markSpotAdded(pool_address) {
+  if (!pool_address) return;
+  const state = load();
+  if (!state.spotAdds) state.spotAdds = {};
+  state.spotAdds[pool_address] = new Date().toISOString();
+  save(state);
+  log("state", `Spot add recorded for pool ${pool_address.slice(0, 8)}`);
+}
+
+/**
+ * Returns true if a spot position has already been added to this pool.
+ */
+export function hasSpotBeenAdded(pool_address) {
+  if (!pool_address) return false;
+  const state = load();
+  return !!state.spotAdds?.[pool_address];
+}
+
+/**
+ * Clear spot-add record for a pool (called when bid_ask position closes, resetting the cycle).
+ */
+export function clearSpotAdd(pool_address) {
+  if (!pool_address) return;
+  const state = load();
+  if (state.spotAdds?.[pool_address]) {
+    delete state.spotAdds[pool_address];
+    save(state);
+  }
+}
+
+/**
  * Record a fee claim event.
  */
 export function recordClaim(position_address, fees_usd) {

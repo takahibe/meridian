@@ -9,7 +9,7 @@ import {
   closePosition,
   searchPools,
 } from "./dlmm.js";
-import { getWalletBalances, swapToken } from "./wallet.js";
+import { getWalletBalances, swapToken, getTokenBalanceByMint } from "./wallet.js";
 import { studyTopLPers } from "./study.js";
 import { addLesson, clearAllLessons, clearPerformance, removeLessonsByKeyword, getPerformanceHistory, pinLesson, unpinLesson, listLessons } from "../lessons.js";
 import { setPositionInstruction } from "../state.js";
@@ -224,6 +224,26 @@ const toolMap = {
       requireAllIntervals: ["indicators", "requireAllIntervals", ["chartIndicators", "requireAllIntervals"]],
     };
 
+    // Special case: dryRun is an env-level flag, not in config object
+    if ("dryRun" in changes || "dry_run" in changes) {
+      const val = changes.dryRun ?? changes.dry_run;
+      const boolVal = val === true || val === "true";
+      process.env.DRY_RUN = String(boolVal);
+      let userConfig = {};
+      if (fs.existsSync(USER_CONFIG_PATH)) {
+        try { userConfig = JSON.parse(fs.readFileSync(USER_CONFIG_PATH, "utf8")); } catch { /**/ }
+      }
+      userConfig.dryRun = boolVal;
+      fs.writeFileSync(USER_CONFIG_PATH, JSON.stringify(userConfig, null, 2));
+      log("config", `update_config: dryRun → ${boolVal}`);
+      const rest = { ...changes };
+      delete rest.dryRun; delete rest.dry_run;
+      if (Object.keys(rest).length === 0) {
+        return { success: true, applied: { dryRun: boolVal }, unknown: [], reason };
+      }
+      changes = rest;
+    }
+
     const applied = {};
     const unknown = [];
 
@@ -359,6 +379,11 @@ export async function executeTool(name, args) {
         notifyDeploy({ pair: result.pool_name || args.pool_name || args.pool_address?.slice(0, 8), amountSol: args.amount_y ?? args.amount_sol ?? 0, position: result.position, tx: result.txs?.[0] ?? result.tx, priceRange: result.price_range, rangeCoverage: result.range_coverage, binStep: result.bin_step, baseFee: result.base_fee }).catch(() => {});
       } else if (name === "close_position") {
         notifyClose({ pair: result.pool_name || args.position_address?.slice(0, 8), pnlUsd: result.pnl_usd ?? 0, pnlPct: result.pnl_pct ?? 0 }).catch(() => {});
+        // Clear spot-add record so the next bid_ask in this pool can get a fresh spot add
+        if (result.pool || args.pool_address) {
+          const { clearSpotAdd } = await import("../state.js");
+          clearSpotAdd(result.pool || args.pool_address);
+        }
         // Note low-yield closes in pool memory so screener avoids redeploying
         if (args.reason && args.reason.toLowerCase().includes("yield")) {
           const poolAddr = result.pool || args.pool_address;
@@ -368,20 +393,44 @@ export async function executeTool(name, args) {
         const SOL_MINT = "So11111111111111111111111111111111111111112";
         if (!args.skip_swap && result.base_mint && result.base_mint !== SOL_MINT) {
           try {
-            const balances = await getWalletBalances({});
-            const token = balances.tokens?.find(t => t.mint === result.base_mint);
-            if (token && token.balance > 0) {
-              const label = token.symbol || result.base_mint.slice(0, 8);
-              log("executor", `Auto-swapping ${token.balance} ${label} back to SOL`);
-              const swapResult = await swapToken({ input_mint: result.base_mint, output_mint: "SOL", amount: token.balance });
+            // Retry Helius balances up to 3x (it lags for newly-received pump.fun tokens),
+            // then fall back to direct RPC ATA lookup so auto-swap never silently skips.
+            let balance = 0;
+            let symbol = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              if (attempt > 0) await new Promise(r => setTimeout(r, 5000));
+              const balances = await getWalletBalances({});
+              const token = balances.tokens?.find(t => t.mint === result.base_mint);
+              if (token && token.balance > 0) {
+                balance = token.balance;
+                symbol = token.symbol;
+                break;
+              }
+            }
+            if (balance <= 0) {
+              const rpcBal = await getTokenBalanceByMint(result.base_mint);
+              if (rpcBal > 0) {
+                balance = rpcBal;
+                log("executor", `Helius missed token ${result.base_mint.slice(0, 8)} — using RPC balance ${rpcBal}`);
+              }
+            }
+            const label = symbol || result.base_mint.slice(0, 8);
+            if (balance > 0) {
+              log("executor", `Auto-swapping ${balance} ${label} back to SOL`);
+              const swapResult = await swapToken({ input_mint: result.base_mint, output_mint: "SOL", amount: balance });
               if (swapResult?.success) {
-                // Tell the model the swap already happened so it doesn't call swap_token again
                 result.auto_swapped = true;
                 result.auto_swap_note = `Base token already auto-swapped back to SOL (${label} → SOL). Do NOT call swap_token again.`;
                 if (swapResult.amount_out) result.sol_received = swapResult.amount_out;
               } else {
-                log("executor_warn", `Auto-swap after close returned failure: ${swapResult?.error || "unknown"}`);
+                log("executor_warn", `Auto-swap after close returned failure for ${label} (${result.base_mint}): ${swapResult?.error || "unknown"} — MANUAL SWAP MAY BE NEEDED`);
+                result.auto_swap_failed = true;
+                result.auto_swap_note = `Auto-swap failed for ${label}. Call swap_token manually.`;
               }
+            } else {
+              log("executor_warn", `Auto-swap skipped: no balance found for base_mint ${result.base_mint} after retries + RPC fallback — MANUAL SWAP MAY BE NEEDED IF TOKEN ARRIVES LATER`);
+              result.auto_swap_skipped = true;
+              result.auto_swap_note = `No balance detected for ${label}. If token arrives after close, call swap_token manually.`;
             }
           } catch (e) {
             log("executor_warn", `Auto-swap after close failed: ${e.message}`);
@@ -455,7 +504,7 @@ async function runSafetyChecks(name, args) {
       const alreadyInPool = positions.positions.some(
         (p) => p.pool === args.pool_address
       );
-      if (alreadyInPool) {
+      if (alreadyInPool && !args.allow_spot_add) {
         return {
           pass: false,
           reason: `Already have an open position in pool ${args.pool_address}. Cannot open duplicate.`,

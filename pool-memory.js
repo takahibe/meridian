@@ -211,6 +211,11 @@ export function recordPoolDeploy(poolAddress, deployData) {
     }
   }
 
+  // Track cross-pool token losses for global cooldown
+  if (deploy.pnl_pct != null && deploy.pnl_pct < 0 && entry.base_mint) {
+    recordTokenLoss(entry.base_mint, entry.name);
+  }
+
   save(db);
   log("pool-memory", `Recorded deploy for ${entry.name} (${poolAddress.slice(0, 8)}): PnL ${deploy.pnl_pct}%`);
 }
@@ -232,6 +237,50 @@ export function isBaseMintOnCooldown(baseMint) {
     entry?.base_mint_cooldown_until &&
     new Date(entry.base_mint_cooldown_until) > now
   );
+}
+
+/**
+ * Record a cross-pool token loss. After N losses across any pool, set a
+ * global token cooldown to prevent re-entry into any pool with this mint.
+ */
+export function recordTokenLoss(baseMint, poolName) {
+  if (!baseMint) return;
+  const db = load();
+  if (!db._token_loss_counts) db._token_loss_counts = {};
+  db._token_loss_counts[baseMint] = (db._token_loss_counts[baseMint] || 0) + 1;
+
+  const maxLosses = config.management.tokenCooldownAfterLosses ?? 3;
+  if (db._token_loss_counts[baseMint] >= maxLosses) {
+    if (!db._token_cooldowns) db._token_cooldowns = {};
+    const hours = config.management.tokenGlobalCooldownHours ?? 24;
+    db._token_cooldowns[baseMint] = {
+      until: new Date(Date.now() + hours * 3_600_000).toISOString(),
+      reason: `${db._token_loss_counts[baseMint]} losses across pools (last: ${poolName || "unknown"})`,
+    };
+    log("pool-memory", `Global token cooldown set for ${baseMint.slice(0, 8)}: ${db._token_loss_counts[baseMint]} cross-pool losses`);
+  }
+  save(db);
+}
+
+/**
+ * Returns true if the mint has an active global cross-pool cooldown.
+ */
+export function isTokenOnGlobalCooldown(baseMint) {
+  if (!baseMint) return false;
+  const db = load();
+  const entry = db._token_cooldowns?.[baseMint];
+  if (!entry?.until) return false;
+  return new Date(entry.until) > new Date();
+}
+
+/**
+ * Return the last N position snapshots for a pool (raw objects).
+ * Used for trend-based yield checks.
+ */
+export function getRecentSnapshots(poolAddress, count = 6) {
+  if (!poolAddress) return [];
+  const db = load();
+  return (db[poolAddress]?.snapshots || []).slice(-count);
 }
 
 // ─── Read ──────────────────────────────────────────────────────

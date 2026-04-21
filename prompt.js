@@ -130,6 +130,7 @@ POOL MEMORY: Past losses or problems → strong skip signal.
 
 DEPLOY RULES:
 - COMPOUNDING: Use the deploy amount from the goal EXACTLY. Do NOT default to a smaller number.
+- lp_strategy MUST be "${config.strategy.strategy}" — NEVER change this to spot, curve, or any other value unless the ACTIVE STRATEGY in the goal explicitly overrides it.
 - bins_below = round(35 + (volatility/5)*34) clamped to [35,69]. bins_above = 0.
 - Bin steps must be [80-125].
 - Pick ONE pool. Deploy or explain why none qualify.
@@ -151,6 +152,8 @@ Decision Factors for Closing (no instruction):
 
 IMPORTANT: Do NOT call get_top_candidates or study_top_lpers while you have healthy open positions. Focus exclusively on managing what you have.
 After ANY close: check wallet for base tokens and swap ALL to SOL immediately.
+
+SPOT-ADD STRATEGY: The system automatically adds a spot position to bid_ask pools when fee/TVL doubles or smart wallets appear. You do NOT need to manually trigger this — the management cycle handles it. If you see two positions in the same pool (one bid_ask, one spot), this is intentional. Manage them independently: the bid_ask captures bidirectional fees, the spot position amplifies upside on the confirmed trend.
 `;
   } else {
     basePrompt += `

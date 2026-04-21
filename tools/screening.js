@@ -2,7 +2,7 @@ import { config } from "../config.js";
 import { isBlacklisted } from "../token-blacklist.js";
 import { isDevBlocked, getBlockedDevs } from "../dev-blocklist.js";
 import { log } from "../logger.js";
-import { isBaseMintOnCooldown, isPoolOnCooldown } from "../pool-memory.js";
+import { isBaseMintOnCooldown, isPoolOnCooldown, recallForPool, isTokenOnGlobalCooldown } from "../pool-memory.js";
 import { confirmIndicatorPreset } from "./chart-indicators.js";
 
 const DATAPI_JUP = "https://datapi.jup.ag/v1";
@@ -294,6 +294,11 @@ export async function getTopCandidates({ limit = 10 } = {}) {
         pushFilteredReason(filteredOut, p, "token cooldown active");
         return false;
       }
+      if (isTokenOnGlobalCooldown(p.base?.mint)) {
+        log("screening", `Filtered global-cooldown token ${p.base?.symbol} (${p.base?.mint?.slice(0, 8)}): repeated cross-pool losses`);
+        pushFilteredReason(filteredOut, p, "global token cooldown (cross-pool losses)");
+        return false;
+      }
       return true;
     })
     .sort((a, b) => scoreCandidate(b) - scoreCandidate(a))
@@ -447,6 +452,12 @@ export async function getTopCandidates({ limit = 10 } = {}) {
     if (eligible.length < before) {
       log("screening", `Indicator confirmation removed ${before - eligible.length} candidate(s)`);
     }
+  }
+
+  // Attach pool-memory history to each candidate so the screener sees past performance
+  for (const p of eligible) {
+    const mem = recallForPool(p.pool);
+    if (mem) p.pool_memory = mem;
   }
 
   return {
