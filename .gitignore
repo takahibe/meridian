@@ -32,3 +32,6 @@ context.md
 docs/
 
 .keys/
+
+# Test files
+test-*.js

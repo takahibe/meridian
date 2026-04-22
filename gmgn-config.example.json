@@ -6,7 +6,7 @@
   "direction": "desc",
   "limit": 100,
   "enrichLimit": 20,
-  "requestDelayMs": 350,
+  "requestDelayMs": 2500,
   "maxRetries": 2,
   "filters": ["renounced", "frozen", "not_wash_trading"],
   "platforms": ["Pump.fun", "meteora_virtual_curve", "pool_meteora"],
