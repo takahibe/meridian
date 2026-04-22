@@ -290,6 +290,10 @@ WARNING: This executes a real on-chain transaction. Cannot be undone.`,
           reason: {
             type: "string",
             description: "Why this position is being closed. Include the rule that triggered it, e.g. 'low yield', 'stop loss', 'trailing TP', 'OOR'. Used for pool memory."
+          },
+          emergency: {
+            type: "boolean",
+            description: "Set to true for an emergency close (severe loss or steep price drop). Uses wider relay slippage so the close lands during a dump. Default: false."
           }
         },
         required: ["position_address"]

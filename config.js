@@ -101,7 +101,7 @@ export const config = {
     direction: gmgnValue("direction", "gmgnDirection", "desc"),
     limit: gmgnValue("limit", "gmgnLimit", 100),
     enrichLimit: gmgnValue("enrichLimit", "gmgnEnrichLimit", 20),
-    requestDelayMs: gmgnValue("requestDelayMs", "gmgnRequestDelayMs", 350),
+    requestDelayMs: gmgnValue("requestDelayMs", "gmgnRequestDelayMs", 800),
     maxRetries: gmgnValue("maxRetries", "gmgnMaxRetries", 2),
     holdersLimit: gmgnValue("holdersLimit", "gmgnHoldersLimit", 100),
     klineResolution: gmgnValue("klineResolution", "gmgnKlineResolution", "5m"),
@@ -153,6 +153,11 @@ export const config = {
     minClaimAmount:        u.minClaimAmount        ?? 5,
     autoSwapAfterClaim:    u.autoSwapAfterClaim    ?? false,
     closeSlippageBps:      u.closeSlippageBps      ?? 500,   // relay zap-out slippage tolerance (500 = 5%)
+    autoSwapSlippageBps:   u.autoSwapSlippageBps   ?? 1500,  // post-close base→SOL slippage (1500 = 15%, wide to preserve SOL during dumps)
+    autoSwapRetries:       u.autoSwapRetries       ?? 3,     // retry attempts on auto-swap failure
+    emergencyStopLossPct:  u.emergencyStopLossPct  ?? -15,   // pnl_pct threshold for bypass-LLM emergency close
+    emergencyCloseSlippageBps: u.emergencyCloseSlippageBps ?? 1500, // wider relay slippage for emergency close
+    emergencyPriceDropPct5m: u.emergencyPriceDropPct5m ?? -25, // price drop in last ~5min (snapshots) that triggers emergency
     outOfRangeBinsToClose: u.outOfRangeBinsToClose ?? 10,
     outOfRangeWaitMinutes: u.outOfRangeWaitMinutes ?? 30,
     oorCooldownTriggerCount: u.oorCooldownTriggerCount ?? 3,

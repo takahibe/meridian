@@ -4,7 +4,7 @@ import readline from "readline";
 import { agentLoop } from "./agent.js";
 import { log } from "./logger.js";
 import { getMyPositions, closePosition, getActiveBin } from "./tools/dlmm.js";
-import { getWalletBalances } from "./tools/wallet.js";
+import { getWalletBalances, sweepPendingTokens } from "./tools/wallet.js";
 import { getTopCandidates } from "./tools/screening.js";
 import { formatGmgnCandidateForPrompt } from "./tools/gmgn.js";
 import { config, reloadScreeningThresholds, computeDeployAmount } from "./config.js";
@@ -197,6 +197,9 @@ export async function runManagementCycle({ silent = false } = {}) {
   let positions = [];
   let liveMessage = null;
   const screeningCooldownMs = 5 * 60 * 1000;
+
+  // Attempt to sweep any tokens that failed auto-swap on previous closes.
+  sweepPendingTokens().catch((e) => log("sweep_error", e.message));
 
   try {
     if (!silent && telegramEnabled()) {
@@ -881,6 +884,19 @@ Summarize the current portfolio health, total fees earned, and performance of al
         }
         const closeRule = getDeterministicCloseRule(p, config.management);
         if (closeRule) {
+          if (closeRule.emergency) {
+            log("state", `[PnL poll] 🚨 EMERGENCY close: ${p.pair} — ${closeRule.reason} — bypassing cooldown + LLM`);
+            _pollTriggeredAt = Date.now();
+            (async () => {
+              try {
+                const { executeTool } = await import("./tools/executor.js");
+                await executeTool("close_position", { position_address: p.position, reason: closeRule.reason, emergency: true });
+              } catch (e) {
+                log("cron_error", `Emergency close failed for ${p.pair}: ${e.message}`);
+              }
+            })();
+            break;
+          }
           const cooldownMs = config.schedule.managementIntervalMin * 60 * 1000;
           const sinceLastTrigger = Date.now() - _pollTriggeredAt;
           if (sinceLastTrigger >= cooldownMs) {
@@ -952,6 +968,25 @@ function getDeterministicCloseRule(position, managementConfig) {
     return false;
   })();
 
+  // Rule 0 — emergency: severe loss OR steep price drop in last ~5min. Bypass cooldown + LLM.
+  const emergencyPnlThreshold = managementConfig.emergencyStopLossPct ?? -15;
+  const emergencyPriceDrop = managementConfig.emergencyPriceDropPct5m ?? -25;
+  if (!pnlSuspect && position.pnl_pct != null && position.pnl_pct <= emergencyPnlThreshold) {
+    return { action: "CLOSE", rule: 0, reason: `emergency pnl ${position.pnl_pct.toFixed(1)}%`, emergency: true };
+  }
+  const snaps = position.snapshots || [];
+  if (snaps.length >= 3) {
+    const recent = snaps.slice(-3);
+    const oldestPrice = Number(recent[0]?.price);
+    const newestPrice = Number(recent[recent.length - 1]?.price);
+    if (Number.isFinite(oldestPrice) && oldestPrice > 0 && Number.isFinite(newestPrice)) {
+      const dropPct = ((newestPrice - oldestPrice) / oldestPrice) * 100;
+      if (dropPct <= emergencyPriceDrop) {
+        return { action: "CLOSE", rule: 0, reason: `emergency price drop ${dropPct.toFixed(1)}% in last 3 snapshots`, emergency: true };
+      }
+    }
+  }
+
   if (!pnlSuspect && position.pnl_pct != null && position.pnl_pct <= managementConfig.stopLossPct) {
     return { action: "CLOSE", rule: 1, reason: "stop loss" };
   }
@@ -968,6 +1003,14 @@ function getDeterministicCloseRule(position, managementConfig) {
     position.active_bin > position.upper_bin + oorBinThreshold
   ) {
     return { action: "CLOSE", rule: 3, reason: "pumped far above range" };
+  }
+  if (
+    position.active_bin != null &&
+    position.lower_bin != null &&
+    position.active_bin < position.lower_bin &&
+    (position.minutes_out_of_range ?? 0) >= 5
+  ) {
+    return { action: "CLOSE", rule: 4, reason: "OOR below lower bin — dumped" };
   }
   if (
     position.active_bin != null &&

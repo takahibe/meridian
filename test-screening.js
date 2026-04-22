@@ -2,7 +2,7 @@
 // Quick pipeline test — runs each stage, prints pass/fail per token
 // Usage: node test-screening.js
 
-
+import "dotenv/config";
 import { config } from "./config.js";
 
 // Force gmgn source + 5m indicator interval

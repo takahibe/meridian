@@ -46,6 +46,30 @@ function save(data) {
   fs.writeFileSync(LESSONS_FILE, JSON.stringify(data, null, 2));
 }
 
+/**
+ * Tag the most recent performance record for a pool with `dumped_on_close`.
+ * Called from executor.js when the post-close auto-swap exhausts retries,
+ * so screener/evolveThresholds can penalize similar profiles.
+ */
+export async function tagAutoSwapFailure(poolAddress) {
+  if (!poolAddress) return;
+  const data = load();
+  for (let i = data.performance.length - 1; i >= 0; i--) {
+    if (data.performance[i]?.pool === poolAddress) {
+      const existing = String(data.performance[i].close_reason || "");
+      if (!existing.includes("dumped_on_close")) {
+        data.performance[i].close_reason = existing
+          ? `${existing} | dumped_on_close`
+          : "dumped_on_close";
+        data.performance[i].auto_swap_failed = true;
+        save(data);
+        log("lessons", `Tagged ${poolAddress.slice(0, 8)} as dumped_on_close`);
+      }
+      return;
+    }
+  }
+}
+
 // ─── Record Position Performance ──────────────────────────────
 
 /**

@@ -419,12 +419,20 @@ export async function notifyDeploy({ pair, amountSol, position, tx, priceRange, 
   );
 }
 
-export async function notifyClose({ pair, pnlUsd, pnlPct }) {
+export async function notifyClose({ pair, pnlUsd, pnlPct, autoSwapped, autoSwapFailed, solReceived, baseLabel }) {
   if (hasActiveLiveMessage()) return;
   const sign = pnlUsd >= 0 ? "+" : "";
+  let swapLine = "";
+  if (autoSwapped) {
+    const solStr = Number.isFinite(Number(solReceived)) ? ` (+${Number(solReceived).toFixed(4)} SOL)` : "";
+    swapLine = `\n✅ Auto-swapped${baseLabel ? ` ${baseLabel}` : ""} → SOL${solStr}`;
+  } else if (autoSwapFailed) {
+    swapLine = `\n⚠️ Auto-swap FAILED${baseLabel ? ` for ${baseLabel}` : ""} — manual swap_token needed`;
+  }
   await sendHTML(
     `🔒 <b>Closed</b> ${pair}\n` +
-    `PnL: ${sign}$${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)`
+    `PnL: ${sign}$${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)` +
+    swapLine
   );
 }
 

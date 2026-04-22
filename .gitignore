@@ -30,3 +30,5 @@ logs/
 # Dev context
 context.md
 docs/
+
+.keys/

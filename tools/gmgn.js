@@ -46,16 +46,17 @@ function appendParams(url, params = {}) {
 
 async function gmgnFetch(pathname, { method = "GET", params = {}, body = null } = {}) {
   const baseUrl = String(config.gmgn?.baseUrl || "https://openapi.gmgn.ai").replace(/\/+$/, "");
-  const url = new URL(`${baseUrl}${pathname}`);
-  appendParams(url, {
-    ...params,
-    timestamp: Math.floor(Date.now() / 1000),
-    client_id: randomUUID(),
-  });
 
   const maxRetries = Math.max(0, Number(config.gmgn?.maxRetries ?? 2));
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     await paceGmgnRequest();
+    // Regenerate auth query per attempt: timestamp ±5s window, client_id replay window 7s
+    const url = new URL(`${baseUrl}${pathname}`);
+    appendParams(url, {
+      ...params,
+      timestamp: Math.floor(Date.now() / 1000),
+      client_id: randomUUID(),
+    });
     const res = await fetch(url, {
       method,
       headers: {
@@ -570,10 +571,14 @@ export async function discoverGmgnPools({ limit = 10 } = {}) {
   // ── Stage 3: holders/traders enrichment (no hard filter) + Meteora pool ──
   const s3 = [];
   const minTvl = num(g.minTvl ?? config.screening.minTvl ?? 0);
+  const isTransientGmgnError = (err) => {
+    const msg = String(err?.message || "");
+    return /temporarily banned|rate limit|429|Just a moment|cloudflare|challenge/i.test(msg);
+  };
   for (const { token, info, infoCheck } of s2) {
     const mint = token.address;
     try {
-      const [holdersPayload, tradersPayload] = await Promise.all([
+      const [holdersResult, tradersResult] = await Promise.allSettled([
         gmgnFetch("/v1/market/token_top_holders", {
           params: { chain: "sol", address: mint, limit: g.holdersLimit || 100, order_by: "amount_percentage", direction: "desc" },
         }),
@@ -581,9 +586,27 @@ export async function discoverGmgnPools({ limit = 10 } = {}) {
           params: { chain: "sol", address: mint, limit: g.holdersLimit || 100, order_by: "profit", direction: "desc" },
         }),
       ]);
-      const holders = unwrapList(holdersPayload, ["list", "holders", "data"]);
-      const traders = unwrapList(tradersPayload, ["list", "traders", "data"]);
+      let holders = [];
+      let traders = [];
+      let partial = false;
+      if (holdersResult.status === "fulfilled") {
+        holders = unwrapList(holdersResult.value, ["list", "holders", "data"]);
+      } else if (isTransientGmgnError(holdersResult.reason)) {
+        partial = true;
+        log("gmgn", `Stage3 holders transient fail ${token.symbol || mint}: ${holdersResult.reason.message} — continuing without holders`);
+      } else {
+        throw holdersResult.reason;
+      }
+      if (tradersResult.status === "fulfilled") {
+        traders = unwrapList(tradersResult.value, ["list", "traders", "data"]);
+      } else if (isTransientGmgnError(tradersResult.reason)) {
+        partial = true;
+        log("gmgn", `Stage3 traders transient fail ${token.symbol || mint}: ${tradersResult.reason.message} — continuing without traders`);
+      } else {
+        throw tradersResult.reason;
+      }
       const holdersCheck = analyzeHoldersAndTraders(holders, traders);
+      if (partial) holdersCheck.partial = true;
 
       const topPools = await fetchTopMeteoraDlmmPoolsForMint(mint, minTvl, 2);
       if (topPools.length === 0) {

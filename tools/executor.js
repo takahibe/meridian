@@ -480,7 +480,7 @@ export async function executeTool(name, args) {
       } else if (name === "deploy_position") {
         notifyDeploy({ pair: result.pool_name || args.pool_name || args.pool_address?.slice(0, 8), amountSol: args.amount_y ?? args.amount_sol ?? 0, position: result.position, tx: result.txs?.[0] ?? result.tx, priceRange: result.price_range, rangeCoverage: result.range_coverage, binStep: result.bin_step, baseFee: result.base_fee }).catch(() => {});
       } else if (name === "close_position") {
-        notifyClose({ pair: result.pool_name || args.position_address?.slice(0, 8), pnlUsd: result.pnl_usd ?? 0, pnlPct: result.pnl_pct ?? 0 }).catch(() => {});
+        // notifyClose is called AFTER the auto-swap block below so we can surface its outcome.
         // Clear spot-add record so the next bid_ask in this pool can get a fresh spot add
         if (result.pool || args.pool_address) {
           const { clearSpotAdd } = await import("../state.js");
@@ -493,51 +493,78 @@ export async function executeTool(name, args) {
         }
         // Auto-swap base token back to SOL unless user said to hold
         const SOL_MINT = "So11111111111111111111111111111111111111112";
+        let autoSwapLabel = null;
         if (!args.skip_swap && result.base_mint && result.base_mint !== SOL_MINT) {
           try {
-            // Retry Helius balances up to 3x (it lags for newly-received pump.fun tokens),
-            // then fall back to direct RPC ATA lookup so auto-swap never silently skips.
-            let balance = 0;
-            let symbol = null;
-            for (let attempt = 0; attempt < 3; attempt++) {
-              if (attempt > 0) await new Promise(r => setTimeout(r, 5000));
-              const balances = await getWalletBalances({});
+            const slippageBps = config.management.autoSwapSlippageBps ?? 1500;
+            const maxAttempts = Math.max(1, config.management.autoSwapRetries ?? 3);
+            const backoffMs = [2000, 5000, 10000];
+            let label = result.base_mint.slice(0, 8);
+            let lastError = null;
+            let swapped = false;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+              if (attempt > 0) await new Promise(r => setTimeout(r, backoffMs[Math.min(attempt - 1, backoffMs.length - 1)]));
+              // Refetch balance each attempt — dump may have moved it.
+              let balance = 0;
+              let symbol = null;
+              const balances = await getWalletBalances({}).catch(() => ({}));
               const token = balances.tokens?.find(t => t.mint === result.base_mint);
               if (token && token.balance > 0) {
                 balance = token.balance;
                 symbol = token.symbol;
-                break;
+              } else {
+                const rpcBal = await getTokenBalanceByMint(result.base_mint).catch(() => 0);
+                if (rpcBal > 0) balance = rpcBal;
               }
-            }
-            if (balance <= 0) {
-              const rpcBal = await getTokenBalanceByMint(result.base_mint);
-              if (rpcBal > 0) {
-                balance = rpcBal;
-                log("executor", `Helius missed token ${result.base_mint.slice(0, 8)} — using RPC balance ${rpcBal}`);
+              label = symbol || label;
+              if (balance <= 0) {
+                lastError = "no balance detected";
+                continue;
               }
-            }
-            const label = symbol || result.base_mint.slice(0, 8);
-            if (balance > 0) {
-              log("executor", `Auto-swapping ${balance} ${label} back to SOL`);
-              const swapResult = await swapToken({ input_mint: result.base_mint, output_mint: "SOL", amount: balance });
+              log("executor", `Auto-swap attempt ${attempt + 1}/${maxAttempts}: ${balance} ${label} → SOL (slippage ${slippageBps}bps)`);
+              const swapResult = await swapToken({ input_mint: result.base_mint, output_mint: "SOL", amount: balance, slippageBps });
               if (swapResult?.success) {
                 result.auto_swapped = true;
-                result.auto_swap_note = `Base token already auto-swapped back to SOL (${label} → SOL). Do NOT call swap_token again.`;
+                result.auto_swap_note = `Base token auto-swapped back to SOL (${label} → SOL). Do NOT call swap_token again.`;
                 if (swapResult.amount_out) result.sol_received = swapResult.amount_out;
-              } else {
-                log("executor_warn", `Auto-swap after close returned failure for ${label} (${result.base_mint}): ${swapResult?.error || "unknown"} — MANUAL SWAP MAY BE NEEDED`);
-                result.auto_swap_failed = true;
-                result.auto_swap_note = `Auto-swap failed for ${label}. Call swap_token manually.`;
+                swapped = true;
+                break;
               }
-            } else {
-              log("executor_warn", `Auto-swap skipped: no balance found for base_mint ${result.base_mint} after retries + RPC fallback — MANUAL SWAP MAY BE NEEDED IF TOKEN ARRIVES LATER`);
-              result.auto_swap_skipped = true;
-              result.auto_swap_note = `No balance detected for ${label}. If token arrives after close, call swap_token manually.`;
+              lastError = swapResult?.error || "unknown";
+              log("executor_warn", `Auto-swap attempt ${attempt + 1} failed for ${label}: ${lastError}`);
             }
+            if (!swapped) {
+              log("executor_warn", `Auto-swap gave up after ${maxAttempts} attempts for ${label} (${result.base_mint}): ${lastError} — MANUAL SWAP MAY BE NEEDED`);
+              result.auto_swap_failed = true;
+              result.auto_swap_note = `Auto-swap failed for ${label} after ${maxAttempts} attempts (${lastError}). Call swap_token manually.`;
+              try {
+                const { tagAutoSwapFailure } = await import("../lessons.js");
+                await tagAutoSwapFailure(result.pool || args.pool_address);
+              } catch (tagErr) {
+                log("executor_warn", `tagAutoSwapFailure failed: ${tagErr.message}`);
+              }
+              try {
+                const { addPendingSweep } = await import("../state.js");
+                addPendingSweep({ mint: result.base_mint, label, pool: result.pool || args.pool_address });
+              } catch (queueErr) {
+                log("executor_warn", `addPendingSweep failed: ${queueErr.message}`);
+              }
+            }
+            result.auto_swap_slippage_bps = slippageBps;
+            autoSwapLabel = label;
           } catch (e) {
             log("executor_warn", `Auto-swap after close failed: ${e.message}`);
           }
         }
+        notifyClose({
+          pair: result.pool_name || args.position_address?.slice(0, 8),
+          pnlUsd: result.pnl_usd ?? 0,
+          pnlPct: result.pnl_pct ?? 0,
+          autoSwapped: !!result.auto_swapped,
+          autoSwapFailed: !!result.auto_swap_failed,
+          solReceived: result.sol_received,
+          baseLabel: autoSwapLabel,
+        }).catch(() => {});
       } else if (name === "claim_fees" && config.management.autoSwapAfterClaim && result.base_mint) {
         const SOL_MINT = "So11111111111111111111111111111111111111112";
         if (result.base_mint !== SOL_MINT) {

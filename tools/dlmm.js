@@ -1351,7 +1351,7 @@ export async function claimFees({ position_address }) {
 }
 
 // ─── Close Position ────────────────────────────────────────────
-export async function closePosition({ position_address, reason }) {
+export async function closePosition({ position_address, reason, emergency = false }) {
   position_address = normalizeMint(position_address);
   if (process.env.DRY_RUN === "true") {
     return { dry_run: true, would_close: position_address, message: "DRY RUN — no transaction sent" };
@@ -1388,10 +1388,15 @@ export async function closePosition({ position_address, reason }) {
         }),
       });
 
-      const rawSlippage = Number(config.management.closeSlippageBps);
+      const rawSlippage = Number(
+        emergency
+          ? (config.management.emergencyCloseSlippageBps ?? 1500)
+          : config.management.closeSlippageBps
+      );
       const closeSlippageBps = Number.isFinite(rawSlippage) && rawSlippage > 0
         ? Math.min(10000, Math.max(1, Math.round(rawSlippage)))
         : 500;
+      if (emergency) log("close", `EMERGENCY close: using wider slippage ${closeSlippageBps}bps`);
       const order = await meridianJson("/execution/zap-out/order", {
         method: "POST",
         headers: getMeridianHeaders(),

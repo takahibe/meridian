@@ -180,6 +180,7 @@ export async function swapToken({
   input_mint,
   output_mint,
   amount,
+  slippageBps,
 }) {
   input_mint  = normalizeMint(input_mint);
   output_mint = normalizeMint(output_mint);
@@ -187,7 +188,7 @@ export async function swapToken({
   if (process.env.DRY_RUN === "true") {
     return {
       dry_run: true,
-      would_swap: { input_mint, output_mint, amount },
+      would_swap: { input_mint, output_mint, amount, slippageBps },
       message: "DRY RUN — no transaction sent",
     };
   }
@@ -212,6 +213,9 @@ export async function swapToken({
       amount: amountStr,
       taker: wallet.publicKey.toString(),
     });
+    if (Number.isFinite(Number(slippageBps)) && Number(slippageBps) > 0) {
+      search.set("slippageBps", String(Math.floor(Number(slippageBps))));
+    }
     const referralParams = getJupiterReferralParams();
     if (referralParams) {
       search.set("referralAccount", referralParams.referralAccount);
@@ -282,4 +286,54 @@ export async function swapToken({
     log("swap_error", error.message);
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Attempt to sweep each pending auto-swap-failed token back to SOL.
+ * Called from the management cycle. Silent on empty queue.
+ * Drops entries after too many failed attempts so the queue doesn't grow unbounded.
+ */
+export async function sweepPendingTokens() {
+  const { getPendingSweeps, markSweepAttempt, clearPendingSweep } = await import("../state.js");
+  const pending = getPendingSweeps();
+  if (!pending.length) return { swept: 0, attempted: 0, dropped: 0 };
+
+  const SOL_MINT = config.tokens.SOL;
+  const slippageBps = config.management.autoSwapSlippageBps ?? 1500;
+  const maxAttempts = Math.max(3, config.management.autoSwapRetries ?? 3) * 3;
+
+  let swept = 0;
+  let attempted = 0;
+  let dropped = 0;
+
+  for (const entry of pending) {
+    if ((entry.attempts || 0) >= maxAttempts) {
+      log("sweep_warn", `Dropping ${entry.label} after ${entry.attempts} failed sweeps`);
+      clearPendingSweep(entry.mint);
+      dropped++;
+      continue;
+    }
+    const balance = await getTokenBalanceByMint(entry.mint).catch(() => 0);
+    if (balance <= 0) {
+      // Token is gone (manually swapped or transferred) — clear entry.
+      log("sweep", `${entry.label}: zero balance, clearing queue entry`);
+      clearPendingSweep(entry.mint);
+      continue;
+    }
+    attempted++;
+    markSweepAttempt(entry.mint);
+    log("sweep", `Sweeping ${balance} ${entry.label} → SOL (slippage ${slippageBps}bps, attempt ${entry.attempts + 1})`);
+    const swap = await swapToken({ input_mint: entry.mint, output_mint: SOL_MINT, amount: balance, slippageBps });
+    if (swap?.success) {
+      swept++;
+      clearPendingSweep(entry.mint);
+      log("sweep", `Swept ${entry.label} successfully (tx ${swap.tx?.slice(0, 12)}...)`);
+    } else {
+      log("sweep_warn", `Sweep failed for ${entry.label}: ${swap?.error || "unknown"}`);
+    }
+  }
+  if (swept || attempted || dropped) {
+    log("sweep", `Cycle done: ${swept} swept, ${attempted - swept} failed, ${dropped} dropped`);
+  }
+  return { swept, attempted, dropped };
 }

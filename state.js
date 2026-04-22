@@ -29,13 +29,15 @@ function sanitizeStoredText(text, maxLen = MAX_INSTRUCTION_LENGTH) {
 
 function load() {
   if (!fs.existsSync(STATE_FILE)) {
-    return { positions: {}, recentEvents: [], lastUpdated: null };
+    return { positions: {}, recentEvents: [], pendingSweeps: [], lastUpdated: null };
   }
   try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    const data = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    if (!Array.isArray(data.pendingSweeps)) data.pendingSweeps = [];
+    return data;
   } catch (err) {
     log("state_error", `Failed to read state.json: ${err.message}`);
-    return { positions: {}, lastUpdated: null };
+    return { positions: {}, pendingSweeps: [], lastUpdated: null };
   }
 }
 
@@ -45,6 +47,58 @@ function save(state) {
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
   } catch (err) {
     log("state_error", `Failed to write state.json: ${err.message}`);
+  }
+}
+
+// ─── Pending Sweeps (auto-swap-failed tokens awaiting retry) ───
+
+export function addPendingSweep({ mint, label, pool }) {
+  if (!mint) return;
+  const state = load();
+  if (!Array.isArray(state.pendingSweeps)) state.pendingSweeps = [];
+  const existing = state.pendingSweeps.find((e) => e.mint === mint);
+  if (existing) {
+    existing.attempts = (existing.attempts || 0);
+    existing.last_seen = new Date().toISOString();
+    if (label) existing.label = label;
+    if (pool) existing.pool = pool;
+  } else {
+    state.pendingSweeps.push({
+      mint,
+      label: label || mint.slice(0, 8),
+      pool: pool || null,
+      queued_at: new Date().toISOString(),
+      last_attempt_at: null,
+      attempts: 0,
+    });
+  }
+  save(state);
+  log("state", `Queued pending sweep: ${label || mint.slice(0, 8)}`);
+}
+
+export function getPendingSweeps() {
+  const state = load();
+  return Array.isArray(state.pendingSweeps) ? state.pendingSweeps : [];
+}
+
+export function markSweepAttempt(mint) {
+  const state = load();
+  const entry = state.pendingSweeps?.find((e) => e.mint === mint);
+  if (entry) {
+    entry.attempts = (entry.attempts || 0) + 1;
+    entry.last_attempt_at = new Date().toISOString();
+    save(state);
+  }
+}
+
+export function clearPendingSweep(mint) {
+  const state = load();
+  if (!Array.isArray(state.pendingSweeps)) return;
+  const before = state.pendingSweeps.length;
+  state.pendingSweeps = state.pendingSweeps.filter((e) => e.mint !== mint);
+  if (state.pendingSweeps.length !== before) {
+    save(state);
+    log("state", `Cleared pending sweep: ${mint.slice(0, 8)}`);
   }
 }
 
