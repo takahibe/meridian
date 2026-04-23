@@ -1653,12 +1653,32 @@ export async function closePosition({ position_address, reason, emergency = fals
       }
     } else {
       log("close", `Step 2: No position liquidity detected, closing account`);
-      const closeTx = await pool.closePosition({
-        owner: wallet.publicKey,
-        position: { publicKey: positionPubKey },
-      });
-      const txHash = await sendAndConfirmTransaction(getConnection(), closeTx, [wallet]);
-      closeTxHashes.push(txHash);
+      try {
+        const closeTx = await pool.closePosition({
+          owner: wallet.publicKey,
+          position: { publicKey: positionPubKey },
+        });
+        const txHash = await sendAndConfirmTransaction(getConnection(), closeTx, [wallet]);
+        closeTxHashes.push(txHash);
+      } catch (e) {
+        const message = String(e?.message || e);
+        if (message.includes("AccountOwnedByWrongProgram") || message.includes("custom program error: 0xbbf")) {
+          log("close_warn", `Position ${position_address} already invalid or effectively closed, suppressing stale close retry: ${message}`);
+          recordClose(position_address, reason || "agent decision (stale close suppressed)");
+          _positionsCacheAt = 0;
+          return {
+            success: true,
+            suppressed_stale_close: true,
+            position: position_address,
+            pool: poolAddress,
+            claim_txs: claimTxHashes,
+            close_txs: closeTxHashes,
+            txs: claimTxHashes,
+            warning: message,
+          };
+        }
+        throw e;
+      }
     }
     const txHashes = [...claimTxHashes, ...closeTxHashes];
     log("close", `Step 2 OK (close only): ${closeTxHashes.join(", ") || "none"}`);

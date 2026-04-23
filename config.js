@@ -160,6 +160,8 @@ export const config = {
     emergencyPriceDropPct5m: u.emergencyPriceDropPct5m ?? -25, // price drop in last ~5min (snapshots) that triggers emergency
     outOfRangeBinsToClose: u.outOfRangeBinsToClose ?? 10,
     outOfRangeWaitMinutes: u.outOfRangeWaitMinutes ?? 30,
+    outOfRangeWaitMinutesUpper: u.outOfRangeWaitMinutesUpper ?? u.outOfRangeWaitMinutes ?? 30,
+    outOfRangeWaitMinutesLower: u.outOfRangeWaitMinutesLower ?? u.outOfRangeWaitMinutes ?? 30,
     oorCooldownTriggerCount: u.oorCooldownTriggerCount ?? 3,
     oorCooldownHours:       u.oorCooldownHours       ?? 12,
     repeatDeployCooldownEnabled: u.repeatDeployCooldownEnabled ?? true,
@@ -293,7 +295,8 @@ export function computeDeployAmount(walletSol) {
   const ceil     = config.risk.maxDeployAmount;
   const deployable = Math.max(0, walletSol - reserve);
   const dynamic    = deployable * pct;
-  const result     = Math.min(ceil, Math.max(floor, dynamic));
+  const hardCap    = Math.min(ceil, floor);
+  const result     = Math.min(hardCap, Math.max(floor, dynamic));
   return parseFloat(result.toFixed(2));
 }
 
