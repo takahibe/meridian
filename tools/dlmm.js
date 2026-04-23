@@ -1381,16 +1381,6 @@ export async function closePosition({ position_address, reason, emergency = fals
         log("close_warn", `Pool ${poolAddress.slice(0, 8)} has no SOL side (${poolMeta.token_x_symbol}/${poolMeta.token_y_symbol}) — zapping to tokenY`);
       }
 
-      const quotes = await meridianJson("/execution/zap-out/quotes", {
-        method: "POST",
-        headers: getMeridianHeaders(),
-        body: JSON.stringify({
-          agentId: config.hiveMind.agentId || "agent-local",
-          positionId: position_address,
-          bps: 10000,
-        }),
-      });
-
       const rawSlippage = Number(
         emergency
           ? (config.management.emergencyCloseSlippageBps ?? 1500)
@@ -1415,14 +1405,13 @@ export async function closePosition({ position_address, reason, emergency = fals
           type: "meteora",
           fromBinId: closeFromBinId,
           toBinId: closeToBinId,
-          quoteRequestId: quotes.requestId,
         }),
       });
 
       const closeUnsigned = order?.order?.transactions?.close || [];
       const swapUnsigned = order?.order?.transactions?.swap || [];
       if (closeUnsigned.length + swapUnsigned.length === 0) {
-        throw new Error("LPAgent close order returned no transactions. Check the position, quote response, and selected output.");
+        throw new Error("LPAgent close order returned no transactions. Check the position, selected output, and relay order response.");
       }
 
       const submit = await meridianJson("/execution/zap-out/submit", {
