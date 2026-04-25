@@ -73,6 +73,16 @@ DRY_RUN=true                           # set false for live trading
 
 > **RPC**: defaults to `https://pump.helius-rpc.com` (no key needed). Override with `RPC_URL=` in `.env`.
 
+Optional encrypted `.env` flow:
+
+```bash
+cp .env .env.raw
+printf "replace-with-a-long-local-key\n" > .envrypt
+npm run env:encrypt
+```
+
+Meridian loads envrypt-style encrypted values automatically. Keep `.env.raw` and `.envrypt` local; both are gitignored.
+
 **4. Copy the example config**
 
 ```bash
