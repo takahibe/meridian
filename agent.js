@@ -329,6 +329,14 @@ export async function agentLoop(goal, maxSteps = config.llm.maxSteps, sessionHis
           };
         }
 
+        // Tag deploys with their source so state.js / management rules can apply manual-grace logic.
+        // Caller can force via options.deploySource (e.g. Telegram passes "manual" even when role=SCREENER).
+        // Otherwise: GENERAL = user (REPL); MANAGER/SCREENER = autonomous cron.
+        if (functionName === "deploy_position" && functionArgs && functionArgs.deploy_source == null) {
+          functionArgs.deploy_source = options.deploySource
+            ?? (agentType === "GENERAL" ? "manual" : "auto");
+        }
+
         await onToolStart?.({ name: functionName, args: functionArgs, step });
         const result = await executeTool(functionName, functionArgs);
         await onToolFinish?.({

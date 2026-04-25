@@ -122,6 +122,7 @@ export function trackPosition({
   organic_score,
   initial_value_usd,
   signal_snapshot = null,
+  deploy_source = "auto",
 }) {
   const state = load();
   state.positions[position] = {
@@ -141,6 +142,9 @@ export function trackPosition({
     initial_value_usd,
     signal_snapshot: signal_snapshot || null,
     deployed_at: new Date().toISOString(),
+    deploy_source: deploy_source === "manual" ? "manual" : "auto",
+    auto_close_disabled: false,
+    stop_loss_warned_at: null,
     out_of_range_since: null,
     last_claim_at: null,
     total_fees_claimed_usd: 0,
@@ -293,6 +297,33 @@ export function recordRebalance(old_position, new_position) {
     newPos.notes.push(`Rebalanced from ${old_position}`);
   }
   save(state);
+}
+
+/**
+ * Toggle the auto_close_disabled flag for a position.
+ * When true, deterministic Rules 1-5 skip this position; only Rule 0 (emergency) still fires.
+ */
+export function setAutoCloseDisabled(position_address, disabled) {
+  const state = load();
+  const pos = state.positions[position_address];
+  if (!pos) return false;
+  pos.auto_close_disabled = !!disabled;
+  save(state);
+  log("state", `Position ${position_address} auto_close_disabled = ${pos.auto_close_disabled}`);
+  return true;
+}
+
+/**
+ * Mark the time we sent a pre-close stop-loss warning for a position.
+ * Used to debounce the warning so we don't spam Telegram every cron tick.
+ */
+export function markStopLossWarned(position_address) {
+  const state = load();
+  const pos = state.positions[position_address];
+  if (!pos) return false;
+  pos.stop_loss_warned_at = new Date().toISOString();
+  save(state);
+  return true;
 }
 
 /**
@@ -476,7 +507,7 @@ export function getStateSummary() {
  * Returns { action, reason } or null if no exit needed.
  */
 export function updatePnlAndCheckExits(position_address, positionData, mgmtConfig) {
-  const { pnl_pct: currentPnlPct, pnl_pct_suspicious, in_range, fee_per_tvl_24h } = positionData;
+  const { pnl_pct: currentPnlPct, pnl_pct_suspicious, in_range, fee_per_tvl_24h, active_bin, lower_bin, upper_bin } = positionData;
   const state = load();
   const pos = state.positions[position_address];
   if (!pos || pos.closed) return null;
@@ -493,6 +524,14 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
     pos.confirmed_trailing_exit_until = null;
   }
 
+  // /hold flag: hands-off completely — only the index.js Rule 0 emergency can still fire.
+  if (pos.auto_close_disabled) return null;
+
+  // Manual deploys get a grace window where SL / OOR / low-yield don't fire (trailing TP still does).
+  const ageMinutes = pos.deployed_at ? (Date.now() - new Date(pos.deployed_at).getTime()) / 60000 : 0;
+  const manualGraceMin = mgmtConfig.manualGracePeriodMinutes ?? 60;
+  const inManualGrace = pos.deploy_source === "manual" && ageMinutes < manualGraceMin;
+
   let changed = false;
 
   // Activate trailing TP once trigger threshold is reached
@@ -502,24 +541,47 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
     log("state", `Position ${position_address} trailing TP activated (confirmed peak: ${pos.peak_pnl_pct}%)`);
   }
 
+  // Detect OOR direction: "upper" = price moved above range (ideal exit for bid-ask cycle),
+  // "lower" = price dumped below range (bag risk, wait for bounce).
+  let oorDirection = null;
+  if (in_range === false && Number.isFinite(active_bin)) {
+    if (Number.isFinite(upper_bin) && active_bin > upper_bin) oorDirection = "upper";
+    else if (Number.isFinite(lower_bin) && active_bin < lower_bin) oorDirection = "lower";
+  }
+
   // Update OOR state
   if (in_range === false && !pos.out_of_range_since) {
     pos.out_of_range_since = new Date().toISOString();
+    pos.out_of_range_direction = oorDirection;
     changed = true;
-    log("state", `Position ${position_address} marked out of range`);
+    log("state", `Position ${position_address} marked out of range (${oorDirection || "unknown"})`);
   } else if (in_range === true && pos.out_of_range_since) {
     pos.out_of_range_since = null;
+    pos.out_of_range_direction = null;
     changed = true;
     log("state", `Position ${position_address} back in range`);
+  } else if (in_range === false && oorDirection && pos.out_of_range_direction !== oorDirection) {
+    pos.out_of_range_direction = oorDirection;
+    changed = true;
   }
 
   if (changed) save(state);
 
-  // ── Stop loss ──────────────────────────────────────────────────
-  if (!pnl_pct_suspicious && currentPnlPct != null && mgmtConfig.stopLossPct != null && currentPnlPct <= mgmtConfig.stopLossPct) {
+  // ── Stop loss (per-strategy threshold) ────────────────────────
+  // bid_ask is "buy the dip" — drawdown during fill is expected. Use a wider SL.
+  const effectiveSlPct = pos.strategy === "bid_ask"
+    ? (mgmtConfig.stopLossPctBidAsk ?? mgmtConfig.stopLossPct)
+    : mgmtConfig.stopLossPct;
+  if (
+    !inManualGrace &&
+    !pnl_pct_suspicious &&
+    currentPnlPct != null &&
+    effectiveSlPct != null &&
+    currentPnlPct <= effectiveSlPct
+  ) {
     return {
       action: "STOP_LOSS",
-      reason: `Stop loss: PnL ${currentPnlPct.toFixed(2)}% <= ${mgmtConfig.stopLossPct}%`,
+      reason: `Stop loss: PnL ${currentPnlPct.toFixed(2)}% <= ${effectiveSlPct}% (${pos.strategy})`,
     };
   }
 
@@ -539,13 +601,25 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
   }
 
   // ── Out of range too long ──────────────────────────────────────
-  if (pos.out_of_range_since) {
+  // bid_ask "fully filled" state = active_bin below lower_bin. That's the strategy paying off, not a panic
+  // signal. Within bidAskFillMinutes after deploy, do not auto-close on OOR-below for bid_ask.
+  if (!inManualGrace && pos.out_of_range_since) {
     const minutesOOR = Math.floor((Date.now() - new Date(pos.out_of_range_since).getTime()) / 60000);
-    if (minutesOOR >= mgmtConfig.outOfRangeWaitMinutes) {
-      return {
-        action: "OUT_OF_RANGE",
-        reason: `Out of range for ${minutesOOR}m (limit: ${mgmtConfig.outOfRangeWaitMinutes}m)`,
-      };
+    const dir = pos.out_of_range_direction;
+    const bidAskFillMin = mgmtConfig.bidAskFillMinutes ?? 60;
+    const inBidAskFillGrace = pos.strategy === "bid_ask" && dir === "lower" && ageMinutes < bidAskFillMin;
+    if (!inBidAskFillGrace) {
+      const waitLimit = dir === "upper"
+        ? (mgmtConfig.outOfRangeWaitMinutesUpper ?? mgmtConfig.outOfRangeWaitMinutes)
+        : dir === "lower"
+        ? (mgmtConfig.outOfRangeWaitMinutesLower ?? mgmtConfig.outOfRangeWaitMinutes)
+        : mgmtConfig.outOfRangeWaitMinutes;
+      if (minutesOOR >= waitLimit) {
+        return {
+          action: "OUT_OF_RANGE",
+          reason: `Out of range (${dir || "unknown"}) for ${minutesOOR}m (limit: ${waitLimit}m)`,
+        };
+      }
     }
   }
 
@@ -553,6 +627,7 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
   const { age_minutes } = positionData;
   const minAgeForYieldCheck = mgmtConfig.minAgeBeforeYieldCheck ?? 60;
   if (
+    !inManualGrace &&
     fee_per_tvl_24h != null &&
     mgmtConfig.minFeePerTvl24h != null &&
     fee_per_tvl_24h < mgmtConfig.minFeePerTvl24h &&

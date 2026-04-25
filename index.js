@@ -999,6 +999,17 @@ function formatCandidates(candidates) {
 
 function getDeterministicCloseRule(position, managementConfig) {
   const tracked = getTrackedPosition(position.position);
+  const strategy = tracked?.strategy ?? null;
+  const deploySource = tracked?.deploy_source ?? "auto";
+  const autoCloseDisabled = !!tracked?.auto_close_disabled;
+  const ageMinutes = tracked?.deployed_at
+    ? (Date.now() - new Date(tracked.deployed_at).getTime()) / 60000
+    : (position.age_minutes ?? 0);
+  const inManualGrace = deploySource === "manual" &&
+    ageMinutes < (managementConfig.manualGracePeriodMinutes ?? 60);
+  const inBidAskFillGrace = strategy === "bid_ask" &&
+    ageMinutes < (managementConfig.bidAskFillMinutes ?? 60);
+
   const pnlSuspect = (() => {
     if (position.pnl_pct == null) return false;
     if (position.pnl_pct > -90) return false;
@@ -1009,7 +1020,7 @@ function getDeterministicCloseRule(position, managementConfig) {
     return false;
   })();
 
-  // Rule 0 — emergency: severe loss OR steep price drop in last ~5min. Bypass cooldown + LLM.
+  // Rule 0 — emergency: severe loss OR steep price drop. ALWAYS fires (even when held / in grace).
   const emergencyPnlThreshold = managementConfig.emergencyStopLossPct ?? -15;
   const emergencyPriceDrop = managementConfig.emergencyPriceDropPct5m ?? -25;
   if (!pnlSuspect && position.pnl_pct != null && position.pnl_pct <= emergencyPnlThreshold) {
@@ -1028,10 +1039,30 @@ function getDeterministicCloseRule(position, managementConfig) {
     }
   }
 
-  if (!pnlSuspect && position.pnl_pct != null && position.pnl_pct <= managementConfig.stopLossPct) {
-    return { action: "CLOSE", rule: 1, reason: "stop loss" };
+  // Rules 1-5 skipped entirely when user has /hold'd this position.
+  if (autoCloseDisabled) return null;
+
+  // Rule 1 — stop loss. Per-strategy: bid_ask gets a wider threshold because mark-to-market drawdown
+  // during the fill phase is expected. Also skipped during manual grace (user is in control).
+  const effectiveSlPct = strategy === "bid_ask"
+    ? (managementConfig.stopLossPctBidAsk ?? managementConfig.stopLossPct)
+    : managementConfig.stopLossPct;
+  if (
+    !inManualGrace &&
+    !pnlSuspect &&
+    position.pnl_pct != null &&
+    effectiveSlPct != null &&
+    position.pnl_pct <= effectiveSlPct
+  ) {
+    return { action: "CLOSE", rule: 1, reason: `stop loss (${strategy || "?"} SL ${effectiveSlPct}%)` };
   }
-  if (!pnlSuspect && position.pnl_pct != null && position.pnl_pct >= managementConfig.takeProfitPct) {
+  // Rule 2 — take profit (skip in manual grace; trailing TP covers gain-locking)
+  if (
+    !inManualGrace &&
+    !pnlSuspect &&
+    position.pnl_pct != null &&
+    position.pnl_pct >= managementConfig.takeProfitPct
+  ) {
     return { action: "CLOSE", rule: 2, reason: "take profit" };
   }
   // Scale OOR bin threshold by bin_step so it represents a consistent % price move.
@@ -1039,29 +1070,38 @@ function getDeterministicCloseRule(position, managementConfig) {
   const binStep = position.bin_step ?? 100;
   const oorBinThreshold = Math.round(managementConfig.outOfRangeBinsToClose * (100 / binStep));
   if (
+    !inManualGrace &&
     position.active_bin != null &&
     position.upper_bin != null &&
     position.active_bin > position.upper_bin + oorBinThreshold
   ) {
     return { action: "CLOSE", rule: 3, reason: "pumped far above range" };
   }
+  // Rule 4-below — OOR below lower bin. For bid_ask within fill grace, this is the strategy paying off
+  // (price dumped through your range = you've fully filled). Skip auto-close. Use config value
+  // outOfRangeWaitMinutesLower (was hard-coded to 5).
   if (
+    !inManualGrace &&
+    !inBidAskFillGrace &&
     position.active_bin != null &&
     position.lower_bin != null &&
     position.active_bin < position.lower_bin &&
-    (position.minutes_out_of_range ?? 0) >= 5
+    (position.minutes_out_of_range ?? 0) >= (managementConfig.outOfRangeWaitMinutesLower ?? managementConfig.outOfRangeWaitMinutes ?? 20)
   ) {
     return { action: "CLOSE", rule: 4, reason: "OOR below lower bin — dumped" };
   }
+  // Rule 4-above — OOR above upper bin
   if (
+    !inManualGrace &&
     position.active_bin != null &&
     position.upper_bin != null &&
     position.active_bin > position.upper_bin &&
-    (position.minutes_out_of_range ?? 0) >= managementConfig.outOfRangeWaitMinutes
+    (position.minutes_out_of_range ?? 0) >= (managementConfig.outOfRangeWaitMinutesUpper ?? managementConfig.outOfRangeWaitMinutes)
   ) {
     return { action: "CLOSE", rule: 4, reason: "OOR" };
   }
   if (
+    !inManualGrace &&
     position.fee_per_tvl_24h != null &&
     position.fee_per_tvl_24h < managementConfig.minFeePerTvl24h &&
     (position.age_minutes ?? 0) >= (managementConfig.minAgeBeforeYieldCheck ?? 60)
@@ -1962,6 +2002,7 @@ async function telegramHandler(msg) {
     liveMessage = await createLiveMessage("🤖 Live Update", `Request: ${text.slice(0, 240)}`);
     const { content } = await agentLoop(text, config.llm.maxSteps, sessionHistory, agentRole, agentModel, null, {
       interactive: true,
+      deploySource: "manual", // Telegram is always user-initiated, regardless of role
       onToolStart: async ({ name }) => { await liveMessage?.toolStart(name); },
       onToolFinish: async ({ name, result, success }) => { await liveMessage?.toolFinish(name, result, success); },
     });

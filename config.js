@@ -162,6 +162,10 @@ export const config = {
     outOfRangeWaitMinutes: u.outOfRangeWaitMinutes ?? 30,
     outOfRangeWaitMinutesUpper: u.outOfRangeWaitMinutesUpper ?? u.outOfRangeWaitMinutes ?? 30,
     outOfRangeWaitMinutesLower: u.outOfRangeWaitMinutesLower ?? u.outOfRangeWaitMinutes ?? 30,
+    // Per-strategy stop-loss + grace windows (Layer B fix for bid_ask drawdown sensitivity)
+    stopLossPctBidAsk:        u.stopLossPctBidAsk        ?? -15,  // bid_ask SL — wider, drawdown is expected during fill
+    bidAskFillMinutes:        u.bidAskFillMinutes        ?? 60,   // skip OOR-below close for bid_ask within this window after deploy
+    manualGracePeriodMinutes: u.manualGracePeriodMinutes ?? 60,   // skip Rules 1-5 for manual deploys within this window (Rule 0 still fires)
     oorCooldownTriggerCount: u.oorCooldownTriggerCount ?? 3,
     oorCooldownHours:       u.oorCooldownHours       ?? 12,
     repeatDeployCooldownEnabled: u.repeatDeployCooldownEnabled ?? true,
