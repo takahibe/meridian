@@ -62,7 +62,7 @@ export const config = {
 
   // ─── Pool Screening Thresholds ───────────
   screening: {
-    source:            u.screeningSource    ?? "meteora", // meteora | gmgn
+    source:            u.screeningSource    ?? "meteora", // meteora | gmgn | hybrid
     excludeHighSupplyConcentration: u.excludeHighSupplyConcentration ?? true,
     minFeeActiveTvlRatio: u.minFeeActiveTvlRatio ?? 0.05,
     minTvl:            u.minTvl            ?? 10_000,

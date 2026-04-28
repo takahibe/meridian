@@ -518,7 +518,7 @@ async function checkBounceSetup(mint) {
   };
 }
 
-export async function discoverGmgnPools({ limit = 10 } = {}) {
+export async function discoverGmgnPools({ limit = 10, expandPoolsPerToken = false, poolsPerToken = 3 } = {}) {
   const g = config.gmgn;
   const filtered = [];
   const stageCounts = {};
@@ -609,7 +609,7 @@ export async function discoverGmgnPools({ limit = 10 } = {}) {
       const holdersCheck = analyzeHoldersAndTraders(holders, traders);
       if (partial) holdersCheck.partial = true;
 
-      const topPools = await fetchTopMeteoraDlmmPoolsForMint(mint, minTvl, 2);
+      const topPools = await fetchTopMeteoraDlmmPoolsForMint(mint, minTvl, expandPoolsPerToken ? Math.max(2, poolsPerToken) : 2);
       if (topPools.length === 0) {
         filtered.push({ stage: 3, name: token.symbol || mint, reason: `no SOL DLMM pool above tvl>${minTvl}` });
         continue;
@@ -647,24 +647,46 @@ export async function discoverGmgnPools({ limit = 10 } = {}) {
   stageCounts.s4 = s4.length;
   log("gmgn", `Stage4 indicators: ${s3.length} → ${s4.length} pass`);
 
-  // ── Stage 5: pick best pool ───────────────────────────────────────────────
+  // ── Stage 5: pick pool(s) ─────────────────────────────────────────────────
+  // gmgn mode: collapse to one best pool per token.
+  // hybrid mode (expandPoolsPerToken): emit up to `poolsPerToken` candidates per token,
+  // letting the LLM pick which DLMM pool (bin_step / fee tier) to enter.
   const pools = [];
   for (const { token, info, infoCheck, holdersCheck, topPools, indicatorSignal } of s4) {
     if (pools.length >= limit) break;
     const mint = token.address;
     try {
-      const { pool, detail: poolDetail } = await pickBestPool(topPools);
-      if (!pool) {
-        filtered.push({ stage: 5, name: token.symbol || mint, reason: "pool selection failed" });
-        continue;
+      if (expandPoolsPerToken) {
+        const details = await Promise.all(
+          topPools.map((p) => fetchPoolDetailDirect(p.address || p.pool_address).catch(() => null))
+        );
+        let added = 0;
+        for (let i = 0; i < topPools.length && added < poolsPerToken && pools.length < limit; i++) {
+          const pool = topPools[i];
+          const poolDetail = details[i];
+          const security = {};
+          const candidate = condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAnalysis: infoCheck, holdersAnalysis: holdersCheck, indicatorSignal });
+          if (!candidate.pool || !candidate.base?.mint) continue;
+          pools.push(candidate);
+          added++;
+        }
+        if (added === 0) {
+          filtered.push({ stage: 5, name: token.symbol || mint, reason: "no usable pool from token's DLMM list" });
+        }
+      } else {
+        const { pool, detail: poolDetail } = await pickBestPool(topPools);
+        if (!pool) {
+          filtered.push({ stage: 5, name: token.symbol || mint, reason: "pool selection failed" });
+          continue;
+        }
+        const security = {};
+        const candidate = condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAnalysis: infoCheck, holdersAnalysis: holdersCheck, indicatorSignal });
+        if (!candidate.pool || !candidate.base?.mint) {
+          filtered.push({ stage: 5, name: token.symbol || mint, reason: "incomplete pool mapping" });
+          continue;
+        }
+        pools.push(candidate);
       }
-      const security = {};
-      const candidate = condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAnalysis: infoCheck, holdersAnalysis: holdersCheck, indicatorSignal });
-      if (!candidate.pool || !candidate.base?.mint) {
-        filtered.push({ stage: 5, name: token.symbol || mint, reason: "incomplete pool mapping" });
-        continue;
-      }
-      pools.push(candidate);
     } catch (error) {
       log("gmgn", `Stage5 skip ${token.symbol || mint}: ${error.message}`);
       filtered.push({ stage: 5, name: token.symbol || mint, reason: error.message });

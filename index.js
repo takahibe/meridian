@@ -967,7 +967,7 @@ Summarize the current portfolio health, total fees earned, and performance of al
     }
   }, 30_000);
 
-  _cronTasks = [mgmtTask, screenTask, healthTask, briefingTask, briefingWatchdog];
+  _cronTasks = [mgmtTask, screenTask, healthTask, briefingTask, briefingWatchdog, weeklySourceCheckTask];
   // Store interval ref so stopCronJobs can clear it
   _cronTasks._pnlPollInterval = pnlPollInterval;
   log("cron", `Cycles started — management every ${config.schedule.managementIntervalMin}m, screening every ${config.schedule.screeningIntervalMin}m`);
@@ -1380,6 +1380,7 @@ function renderSettingsMenu(page = "main") {
       [
         settingButton("Source: Meteora", "cfg:set:screeningSource:meteora"),
         settingButton("Source: GMGN", "cfg:set:screeningSource:gmgn"),
+        settingButton("Source: Hybrid", "cfg:set:screeningSource:hybrid"),
       ],
       [toggleButton("gmgnRequireKol", "GMGN require KOL")],
       [toggleButton("useDiscordSignals", "Discord signals"), toggleButton("blockPvpSymbols", "PVP hard block")],
@@ -1458,6 +1459,7 @@ function renderSettingsMenu(page = "main") {
       [
         settingButton("Source: Meteora", "cfg:set:screeningSource:meteora"),
         settingButton("Source: GMGN", "cfg:set:screeningSource:gmgn"),
+        settingButton("Source: Hybrid", "cfg:set:screeningSource:hybrid"),
       ],
       [toggleButton("solMode", "SOL mode"), toggleButton("lpAgentRelayEnabled", "LPAgent relay")],
       [toggleButton("chartIndicatorsEnabled", "Chart indicators"), toggleButton("trailingTakeProfit", "Trailing TP")],

@@ -281,6 +281,41 @@ function mean(arr) {
 
 // ─── Summary for LLM Prompt Injection ────────────────────────────
 
+/**
+ * Score a screening candidate using current Darwinian weights.
+ * Used to pre-rank the candidate list before the LLM sees it — same data
+ * the post-deploy tracker (`stageSignals`) uses, just consumed at screen time.
+ * Returns null if no usable signal fields are present.
+ */
+export function scoreCandidateWithWeights(candidate, weightsObj = null) {
+  if (!candidate) return null;
+  const weights = (weightsObj || loadWeights()).weights || DEFAULT_WEIGHTS;
+  const fields = {
+    organic_score: candidate.organic_score,
+    fee_tvl_ratio: candidate.fee_active_tvl_ratio,
+    volume:        candidate.volume_window ?? candidate.volume,
+    mcap:          candidate.mcap,
+    holder_count:  candidate.holders ?? candidate.base?.holders,
+    volatility:    candidate.volatility,
+  };
+  let score = 0;
+  let used = 0;
+  for (const [name, raw] of Object.entries(fields)) {
+    const v = Number(raw);
+    if (raw == null || !Number.isFinite(v)) continue;
+    const w = weights[name] ?? 1.0;
+    const dir = HIGHER_IS_BETTER.has(name) ? 1 : -1;
+    // Log-scale large magnitudes (mcap/volume) so they don't dominate the sum
+    const norm = (name === "mcap" || name === "volume")
+      ? Math.log10(Math.max(v, 1))
+      : v;
+    score += w * dir * norm;
+    used++;
+  }
+  if (used === 0) return null;
+  return Number(score.toFixed(4));
+}
+
 export function getWeightsSummary() {
   const data = loadWeights();
   const w = data.weights || {};

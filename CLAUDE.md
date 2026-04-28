@@ -68,6 +68,7 @@ Sets defined in `agent.js:6-7`. If you add a tool, also add it to the relevant s
 
 | Key | Section | Default |
 |-----|---------|---------|
+| screeningSource | screening | "meteora" (one of: `meteora`, `gmgn`, `hybrid`) |
 | minFeeActiveTvlRatio | screening | 0.05 |
 | minTvl / maxTvl | screening | 10k / 150k |
 | minVolume | screening | 500 |
