@@ -46,7 +46,7 @@ export async function generateBriefing() {
     "",
     `<b>Lessons Learned:</b>`,
     lessonsLast24h.length > 0
-      ? lessonsLast24h.map(l => `• ${l.rule}`).join("\n")
+      ? lessonsLast24h.map(l => `• ${escapeHtml(l.rule)}`).join("\n")
       : "• No new lessons recorded overnight.",
     "",
     `<b>Current Portfolio:</b>`,
@@ -58,6 +58,10 @@ export async function generateBriefing() {
   ];
 
   return lines.join("\n");
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function loadJson(file) {
