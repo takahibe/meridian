@@ -33,6 +33,7 @@ import { stageSignals } from "./signal-tracker.js";
 import { getWeightsSummary } from "./signal-weights.js";
 import { bootstrapHiveMind, ensureAgentId, getHiveMindPullMode, isHiveMindEnabled, pullHiveMindLessons, pullHiveMindPresets, registerHiveMindAgent, startHiveMindBackgroundSync } from "./hivemind.js";
 import { appendDecision } from "./decision-log.js";
+import { runWeeklySourceCheck } from "./scripts/weekly-source-check.js";
 
 log("startup", "DLMM LP Agent starting...");
 log("startup", `Mode: ${process.env.DRY_RUN === "true" ? "DRY RUN" : "LIVE"}`);
@@ -164,7 +165,7 @@ async function runBriefing() {
 }
 
 /**
- * If the agent restarted after the 1:00 AM UTC cron window,
+ * If the agent restarted after the 08:00 UTC+8 (Asia/Singapore) cron window,
  * fire the briefing immediately on startup so it's never skipped.
  */
 async function maybeRunMissedBriefing() {
@@ -173,10 +174,12 @@ async function maybeRunMissedBriefing() {
 
   if (lastSent === todayUtc) return; // already sent today
 
-  // Only fire if it's past the scheduled time (1:00 AM UTC)
-  const nowUtc = new Date();
-  const briefingHourUtc = 1;
-  if (nowUtc.getUTCHours() < briefingHourUtc) return; // too early, cron will handle it
+  // Only fire if local UTC+8 time is past 08:00 (Singapore has no DST, stable offset)
+  const localHour = parseInt(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Singapore", hour: "numeric", hour12: false }),
+    10,
+  );
+  if (!Number.isFinite(localHour) || localHour < 8) return; // too early, cron will handle it
 
   log("cron", `Missed briefing detected (last sent: ${lastSent || "never"}) — sending now`);
   await runBriefing();
@@ -878,15 +881,24 @@ Summarize the current portfolio health, total fees earned, and performance of al
     }
   });
 
-  // Morning Briefing at 8:00 AM UTC+7 (1:00 AM UTC)
-  const briefingTask = cron.schedule(`0 1 * * *`, async () => {
+  // Morning Briefing at 08:00 UTC+8 (Asia/Singapore — stable offset, no DST)
+  const briefingTask = cron.schedule(`0 8 * * *`, async () => {
     await runBriefing();
-  }, { timezone: 'UTC' });
+  }, { timezone: 'Asia/Singapore' });
 
   // Every 6h — catch up if briefing was missed (agent restart, crash, etc.)
   const briefingWatchdog = cron.schedule(`0 */6 * * *`, async () => {
     await maybeRunMissedBriefing();
   }, { timezone: 'UTC' });
+
+  // Weekly source check — Mondays 09:00 UTC+8 (Asia/Singapore). Informs meteora→gmgn flip decision.
+  const weeklySourceCheckTask = cron.schedule(`0 9 * * 1`, async () => {
+    try {
+      await runWeeklySourceCheck();
+    } catch (e) {
+      log("cron_error", `Weekly source check failed: ${e.message}`);
+    }
+  }, { timezone: 'Asia/Singapore' });
 
   // Lightweight 30s PnL poller — updates trailing TP state between management cycles, no LLM
   let _pnlPollBusy = false;
