@@ -38,7 +38,18 @@ function save(data) {
 
 function isOorCloseReason(reason) {
   const text = String(reason || "").trim().toLowerCase();
-  return text === "oor" || text.includes("out of range") || text.includes("oor");
+  return text === "oor" ||
+    text.includes("out of range") ||
+    text.includes("oor") ||
+    text.includes("pumped far above range") ||
+    text.includes("above range");
+}
+
+function isUpperOorCloseReason(reason) {
+  const t = String(reason || "").trim().toLowerCase();
+  return t.includes("pumped far above range") ||
+    t.includes("above range") ||
+    /out of range\s*\(upper\)/.test(t);
 }
 
 function isAdjustedWinRateExcludedReason(reason) {
@@ -166,6 +177,23 @@ export function recordPoolDeploy(poolAddress, deployData) {
     const cooldownHours = 4;
     const cooldownUntil = setPoolCooldown(entry, cooldownHours, "low yield");
     log("pool-memory", `Cooldown set for ${entry.name} until ${cooldownUntil} (low yield close)`);
+  }
+
+  // Post-pump guard: a single upper-OOR close arms a short token-scoped cooldown
+  // to block re-entry into the same mint at the post-pump top. Independent of
+  // the 3x oorCooldownTriggerCount path below.
+  const upperOorMinutes = Number(config.management.upperOorReentryCooldownMinutes ?? 0);
+  if (upperOorMinutes > 0 && isUpperOorCloseReason(deploy.close_reason)) {
+    const reason = `post-upper-OOR re-entry guard (${upperOorMinutes}m)`;
+    const hours = upperOorMinutes / 60;
+    const poolUntil = setPoolCooldown(entry, hours, reason);
+    log("pool-memory", `Cooldown set for ${entry.name} until ${poolUntil} (${reason})`);
+    if (entry.base_mint) {
+      const mintUntil = setBaseMintCooldown(db, entry.base_mint, hours, reason);
+      if (mintUntil) {
+        log("pool-memory", `Base mint cooldown set for ${entry.base_mint.slice(0, 8)} until ${mintUntil} (${reason})`);
+      }
+    }
   }
 
   const oorTriggerCount = config.management.oorCooldownTriggerCount ?? 3;

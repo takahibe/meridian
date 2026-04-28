@@ -168,6 +168,7 @@ export const config = {
     manualGracePeriodMinutes: u.manualGracePeriodMinutes ?? 60,   // skip Rules 1-5 for manual deploys within this window (Rule 0 still fires)
     oorCooldownTriggerCount: u.oorCooldownTriggerCount ?? 3,
     oorCooldownHours:       u.oorCooldownHours       ?? 12,
+    upperOorReentryCooldownMinutes: u.upperOorReentryCooldownMinutes ?? 60, // single upper-OOR close → short token cooldown to block pump-chase re-entry
     repeatDeployCooldownEnabled: u.repeatDeployCooldownEnabled ?? true,
     repeatDeployCooldownTriggerCount: u.repeatDeployCooldownTriggerCount ?? 3,
     repeatDeployCooldownHours: u.repeatDeployCooldownHours ?? 12,
