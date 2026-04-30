@@ -251,7 +251,7 @@ export async function runManagementCycle({ silent = false } = {}) {
       const exit = updatePnlAndCheckExits(p.position, p, config.management);
       if (exit) {
         if (exit.action === "TRAILING_TP" && exit.needs_confirmation && shouldUsePnlRecheck()) {
-          if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, config.management.trailingDropPct)) {
+          if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, exit.trailing_drop_pct ?? config.management.trailingDropPct)) {
             scheduleTrailingDropConfirmation(p.position);
           }
           continue;
@@ -919,7 +919,7 @@ Summarize the current portfolio health, total fees earned, and performance of al
         const exit = updatePnlAndCheckExits(p.position, p, config.management);
         if (exit) {
           if (exit.action === "TRAILING_TP" && exit.needs_confirmation && shouldUsePnlRecheck()) {
-            if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, config.management.trailingDropPct)) {
+            if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, exit.trailing_drop_pct ?? config.management.trailingDropPct)) {
               scheduleTrailingDropConfirmation(p.position);
             }
             continue;
@@ -1009,6 +1009,14 @@ function formatCandidates(candidates) {
   ].join("\n");
 }
 
+function getBandConfigForPosition(tracked, managementConfig) {
+  const fallback = String(managementConfig.managementBands?.fallback || "B").toUpperCase();
+  const band = String(tracked?.management_band || fallback).toUpperCase();
+  if (band === "A") return { band: "A", ...(managementConfig.managementBands?.bandA || {}) };
+  if (band === "C") return { band: "C", ...(managementConfig.managementBands?.bandC || {}) };
+  return { band: "B", ...(managementConfig.managementBands?.bandB || {}) };
+}
+
 function getDeterministicCloseRule(position, managementConfig) {
   const tracked = getTrackedPosition(position.position);
   const strategy = tracked?.strategy ?? null;
@@ -1021,6 +1029,8 @@ function getDeterministicCloseRule(position, managementConfig) {
     ageMinutes < (managementConfig.manualGracePeriodMinutes ?? 60);
   const inBidAskFillGrace = strategy === "bid_ask" &&
     ageMinutes < (managementConfig.bidAskFillMinutes ?? 60);
+  const bandConfig = getBandConfigForPosition(tracked, managementConfig);
+  const band = bandConfig.band;
 
   const pnlSuspect = (() => {
     if (position.pnl_pct == null) return false;
@@ -1087,7 +1097,18 @@ function getDeterministicCloseRule(position, managementConfig) {
     position.upper_bin != null &&
     position.active_bin > position.upper_bin + oorBinThreshold
   ) {
-    return { action: "CLOSE", rule: 3, reason: "pumped far above range" };
+    const pnl = Number(position.pnl_pct ?? 0);
+    const harvestMin = bandConfig.pumpedHarvestMinPnlPct ?? 1.5;
+    const harvest = !pnlSuspect && position.pnl_pct != null && pnl >= harvestMin;
+    return {
+      action: "CLOSE",
+      rule: 3,
+      reason: harvest
+        ? `Harvest close (Band ${band}): pumped above range with pnl ${pnl.toFixed(2)}% >= ${harvestMin}% threshold`
+        : `Protective close (Band ${band}): pumped above range but pnl ${pnl.toFixed(2)}% < ${harvestMin}% threshold`,
+      classification: harvest ? "pumped_harvest" : "pumped_protective",
+      management_band: band,
+    };
   }
   // Rule 4-below — OOR below lower bin. For bid_ask within fill grace, this is the strategy paying off
   // (price dumped through your range = you've fully filled). Skip auto-close. Use config value
@@ -1108,9 +1129,16 @@ function getDeterministicCloseRule(position, managementConfig) {
     position.active_bin != null &&
     position.upper_bin != null &&
     position.active_bin > position.upper_bin &&
-    (position.minutes_out_of_range ?? 0) >= (managementConfig.outOfRangeWaitMinutesUpper ?? managementConfig.outOfRangeWaitMinutes)
+    (position.minutes_out_of_range ?? 0) >= (bandConfig.upperOorWaitMinutes ?? managementConfig.outOfRangeWaitMinutesUpper ?? managementConfig.outOfRangeWaitMinutes)
   ) {
-    return { action: "CLOSE", rule: 4, reason: "OOR" };
+    const waitLimit = bandConfig.upperOorWaitMinutes ?? managementConfig.outOfRangeWaitMinutesUpper ?? managementConfig.outOfRangeWaitMinutes;
+    return {
+      action: "CLOSE",
+      rule: 4,
+      reason: `Upper OOR close (Band ${band}): out of range for ${position.minutes_out_of_range ?? 0}m (limit: ${waitLimit}m)`,
+      classification: "upper_oor_forced",
+      management_band: band,
+    };
   }
   if (
     !inManualGrace &&

@@ -194,6 +194,29 @@ export const config = {
     trailingTakeProfit:    u.trailingTakeProfit    ?? true,
     trailingTriggerPct:    u.trailingTriggerPct    ?? 3,    // activate trailing at X% PnL
     trailingDropPct:       u.trailingDropPct       ?? 1.5,  // close when drops X% from peak
+    managementBands: {
+      bandA: {
+        maxVolatility: 1.8,
+        trailingTriggerPct: u.managementBandATrailingTriggerPct ?? 4.0,
+        trailingDropPct: u.managementBandATrailingDropPct ?? 1.75,
+        upperOorWaitMinutes: u.managementBandAUpperOorWaitMinutes ?? 9,
+        pumpedHarvestMinPnlPct: u.managementBandAPumpedHarvestMinPnlPct ?? 2.0,
+      },
+      bandB: {
+        maxVolatility: 3.0,
+        trailingTriggerPct: u.managementBandBTrailingTriggerPct ?? 2.5,
+        trailingDropPct: u.managementBandBTrailingDropPct ?? 1.25,
+        upperOorWaitMinutes: u.managementBandBUpperOorWaitMinutes ?? 5,
+        pumpedHarvestMinPnlPct: u.managementBandBPumpedHarvestMinPnlPct ?? 1.5,
+      },
+      bandC: {
+        trailingTriggerPct: u.managementBandCTrailingTriggerPct ?? 1.75,
+        trailingDropPct: u.managementBandCTrailingDropPct ?? 0.85,
+        upperOorWaitMinutes: u.managementBandCUpperOorWaitMinutes ?? 2,
+        pumpedHarvestMinPnlPct: u.managementBandCPumpedHarvestMinPnlPct ?? 1.0,
+      },
+      fallback: u.managementBandFallback ?? "B",
+    },
     pnlSanityMaxDiffPct:   u.pnlSanityMaxDiffPct   ?? 5,    // max allowed diff between reported and derived pnl % before ignoring a tick
     // SOL mode — positions, PnL, and balances reported in SOL instead of USD
     solMode:               u.solMode               ?? false,
@@ -208,7 +231,7 @@ export const config = {
 
   // ─── Scheduling ─────────────────────────
   schedule: {
-    managementIntervalMin:  u.managementIntervalMin  ?? 10,
+    managementIntervalMin:  u.managementIntervalMin  ?? 2,
     screeningIntervalMin:   u.screeningIntervalMin   ?? 30,
     healthCheckIntervalMin: u.healthCheckIntervalMin ?? 60,
   },

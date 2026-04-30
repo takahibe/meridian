@@ -784,6 +784,7 @@ export async function deployPosition({
           active_bin: activeBin.binId,
           initial_value_usd,
           deploy_source,
+          management_config: config.management,
         });
       }
 
@@ -919,6 +920,7 @@ export async function deployPosition({
       active_bin: activeBin.binId,
       initial_value_usd,
       deploy_source,
+      management_config: config.management,
     });
 
     appendDecision({

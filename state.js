@@ -11,6 +11,24 @@
 import fs from "fs";
 import { log } from "./logger.js";
 
+function resolveManagementBand(volatility, managementBands = {}) {
+  const fallback = String(managementBands.fallback || "B").toUpperCase();
+  const numericVol = Number(volatility);
+  if (!Number.isFinite(numericVol)) return fallback;
+  const bandA = managementBands.bandA || {};
+  const bandB = managementBands.bandB || {};
+  if (numericVol <= (bandA.maxVolatility ?? 1.8)) return "A";
+  if (numericVol <= (bandB.maxVolatility ?? 3.0)) return "B";
+  return "C";
+}
+
+function getBandConfig(bandKey, managementBands = {}) {
+  const normalized = String(bandKey || managementBands.fallback || "B").toUpperCase();
+  if (normalized === "A") return { key: "A", ...(managementBands.bandA || {}) };
+  if (normalized === "C") return { key: "C", ...(managementBands.bandC || {}) };
+  return { key: "B", ...(managementBands.bandB || {}) };
+}
+
 const STATE_FILE = "./state.json";
 
 const MAX_RECENT_EVENTS = 20;
@@ -123,8 +141,12 @@ export function trackPosition({
   initial_value_usd,
   signal_snapshot = null,
   deploy_source = "auto",
+  management_config = null,
 }) {
   const state = load();
+  const managementBand = resolveManagementBand(volatility, management_config?.managementBands);
+  const bandConfig = getBandConfig(managementBand, management_config?.managementBands);
+
   state.positions[position] = {
     position,
     pool,
@@ -136,6 +158,8 @@ export function trackPosition({
     active_bin_at_deploy: active_bin,
     bin_step,
     volatility,
+    management_band: managementBand,
+    management_band_config: bandConfig,
     fee_tvl_ratio,
     initial_fee_tvl_24h: fee_tvl_ratio,
     organic_score,
@@ -163,9 +187,12 @@ export function trackPosition({
     confirmed_trailing_exit_until: null,
     trailing_active: false,
   };
-  pushEvent(state, { action: "deploy", position, pool_name: pool_name || pool });
+  pushEvent(state, { action: "deploy", position, pool_name: pool_name || pool, management_band: managementBand });
   save(state);
-  log("state", `Tracked new position: ${position} in pool ${pool}`);
+  const rangeWidthBins = Number.isFinite(bin_range?.min) && Number.isFinite(bin_range?.max)
+    ? Math.abs(bin_range.max - bin_range.min) + 1
+    : null;
+  log("state", `Tracked new position: ${position} in pool ${pool} | vol=${volatility ?? "?"} | band=${managementBand} | range_width_bins=${rangeWidthBins ?? "?"}`);
 }
 
 /**
@@ -437,7 +464,8 @@ export function resolvePendingTrailingDrop(position_address, currentPnlPct, trai
   const stillDroppedEnough = currentPnlPct != null && (pendingPeak - currentPnlPct) >= trailingDropPct;
 
   if (stillNearCrash && stillDroppedEnough) {
-    const reason = `Trailing TP: peak ${pendingPeak.toFixed(2)}% → current ${currentPnlPct.toFixed(2)}% (dropped ${(pendingPeak - currentPnlPct).toFixed(2)}% >= ${trailingDropPct}%)`;
+    const band = pos.management_band || "B";
+    const reason = `Trailing TP (Band ${band}): peak ${pendingPeak.toFixed(2)}% → current ${currentPnlPct.toFixed(2)}% (drop ${(pendingPeak - currentPnlPct).toFixed(2)}% >= ${trailingDropPct}%)`;
     pos.confirmed_trailing_exit_reason = reason;
     pos.confirmed_trailing_exit_until = new Date(Date.now() + 30_000).toISOString();
     save(state);
@@ -486,6 +514,8 @@ export function getStateSummary() {
       pool: p.pool,
       strategy: p.strategy,
       deployed_at: p.deployed_at,
+      volatility: p.volatility ?? null,
+      management_band: p.management_band ?? null,
       out_of_range_since: p.out_of_range_since,
       minutes_out_of_range: minutesOutOfRange(p.position),
       total_fees_claimed_usd: p.total_fees_claimed_usd,
@@ -534,11 +564,22 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
 
   let changed = false;
 
+  const managementBand = pos.management_band || resolveManagementBand(pos.volatility, mgmtConfig.managementBands);
+  const bandConfig = getBandConfig(managementBand, mgmtConfig.managementBands);
+  if (pos.management_band !== managementBand) {
+    pos.management_band = managementBand;
+    changed = true;
+  }
+  pos.management_band_config = bandConfig;
+
+  const trailingTriggerPct = bandConfig.trailingTriggerPct ?? mgmtConfig.trailingTriggerPct;
+  const trailingDropPct = bandConfig.trailingDropPct ?? mgmtConfig.trailingDropPct;
+
   // Activate trailing TP once trigger threshold is reached
-  if (mgmtConfig.trailingTakeProfit && !pos.trailing_active && (pos.peak_pnl_pct ?? 0) >= mgmtConfig.trailingTriggerPct) {
+  if (mgmtConfig.trailingTakeProfit && !pos.trailing_active && (pos.peak_pnl_pct ?? 0) >= trailingTriggerPct) {
     pos.trailing_active = true;
     changed = true;
-    log("state", `Position ${position_address} trailing TP activated (confirmed peak: ${pos.peak_pnl_pct}%)`);
+    log("state", `Position ${position_address} trailing TP activated (Band ${managementBand}, confirmed peak: ${pos.peak_pnl_pct}%)`);
   }
 
   // Detect OOR direction: "upper" = price moved above range (ideal exit for bid-ask cycle),
@@ -588,14 +629,16 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
   // ── Trailing TP ────────────────────────────────────────────────
   if (!pnl_pct_suspicious && pos.trailing_active) {
     const dropFromPeak = pos.peak_pnl_pct - currentPnlPct;
-    if (dropFromPeak >= mgmtConfig.trailingDropPct) {
+    if (dropFromPeak >= trailingDropPct) {
       return {
         action: "TRAILING_TP",
-        reason: `Trailing TP: peak ${pos.peak_pnl_pct.toFixed(2)}% → current ${currentPnlPct.toFixed(2)}% (dropped ${dropFromPeak.toFixed(2)}% >= ${mgmtConfig.trailingDropPct}%)`,
+        reason: `Trailing TP (Band ${managementBand}): peak ${pos.peak_pnl_pct.toFixed(2)}% → current ${currentPnlPct.toFixed(2)}% (drop ${dropFromPeak.toFixed(2)}% >= ${trailingDropPct}%)`,
         needs_confirmation: true,
         peak_pnl_pct: pos.peak_pnl_pct,
         current_pnl_pct: currentPnlPct,
         drop_from_peak_pct: dropFromPeak,
+        trailing_drop_pct: trailingDropPct,
+        management_band: managementBand,
       };
     }
   }
@@ -610,14 +653,17 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
     const inBidAskFillGrace = pos.strategy === "bid_ask" && dir === "lower" && ageMinutes < bidAskFillMin;
     if (!inBidAskFillGrace) {
       const waitLimit = dir === "upper"
-        ? (mgmtConfig.outOfRangeWaitMinutesUpper ?? mgmtConfig.outOfRangeWaitMinutes)
+        ? (bandConfig.upperOorWaitMinutes ?? mgmtConfig.outOfRangeWaitMinutesUpper ?? mgmtConfig.outOfRangeWaitMinutes)
         : dir === "lower"
         ? (mgmtConfig.outOfRangeWaitMinutesLower ?? mgmtConfig.outOfRangeWaitMinutes)
         : mgmtConfig.outOfRangeWaitMinutes;
       if (minutesOOR >= waitLimit) {
         return {
           action: "OUT_OF_RANGE",
-          reason: `Out of range (${dir || "unknown"}) for ${minutesOOR}m (limit: ${waitLimit}m)`,
+          reason: dir === "upper"
+            ? `Upper OOR close (Band ${managementBand}): out of range for ${minutesOOR}m (limit: ${waitLimit}m)`
+            : `Out of range (${dir || "unknown"}) for ${minutesOOR}m (limit: ${waitLimit}m)`,
+          management_band: managementBand,
         };
       }
     }
