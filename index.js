@@ -605,7 +605,11 @@ export async function runScreeningCycle({ silent = false } = {}) {
     // GMGN candidates bypass: platforms already filtered upstream; bundler/bot data from GMGN pipeline
     const filteredOut = [];
     const passing = allCandidates.filter(({ pool, sw, ti }) => {
-      if (pool.gmgn) return true;
+      const fragility = computeCandidateFragility(pool, ti);
+      pool.entry_fragility_score = fragility.score;
+      pool.entry_fragility_level = fragility.level;
+      pool.entry_fragility_reasons = fragility.reasons;
+
       const launchpad = ti?.launchpad ?? null;
       if (launchpad && config.screening.allowedLaunchpads?.length > 0 && !config.screening.allowedLaunchpads.includes(launchpad)) {
         log("screening", `Skipping ${pool.name} — launchpad ${launchpad} not in allow-list`);
@@ -632,6 +636,20 @@ export async function runScreeningCycle({ silent = false } = {}) {
         filteredOut.push({ name: pool.name, reason: `top 10 holders ${top10Pct}% > ${maxTop10Pct}%` });
         return false;
       }
+      const feePct = Number(pool.fee_pct ?? 0);
+      const feeTvl = Number(pool.fee_active_tvl_ratio ?? pool.fee_tvl_ratio ?? 0);
+      const dynamicFeePct = Math.max(0, feePct - Number(pool.base_fee ?? feePct));
+      if (fragility.score >= 40 && feeTvl < Math.max(0.15, Number(config.screening.minFeeActiveTvlRatio ?? 0)) && feePct <= 0.4 && dynamicFeePct <= 0.05) {
+        log("screening", `Fragility veto: dropped ${pool.name} — ultrafragile (${fragility.score}) with weak fee economics (fee=${feePct}%, dynamic=${dynamicFeePct}%, fee/TVL=${feeTvl}%)`);
+        filteredOut.push({ name: pool.name, reason: `ultrafragile ${fragility.score} with weak fee economics (fee ${feePct}%, dynamic ${dynamicFeePct}%, fee/TVL ${feeTvl}%)` });
+        return false;
+      }
+      if (fragility.score >= 20 && feeTvl < Math.max(0.1, Number(config.screening.minFeeActiveTvlRatio ?? 0) * 0.75) && feePct <= 0.3 && dynamicFeePct <= 0.02) {
+        log("screening", `Fragility penalty veto: dropped ${pool.name} — fragile (${fragility.score}) and fee profile too sleepy (fee=${feePct}%, dynamic=${dynamicFeePct}%, fee/TVL=${feeTvl}%)`);
+        filteredOut.push({ name: pool.name, reason: `fragile ${fragility.score} and fee profile too sleepy (fee ${feePct}%, dynamic ${dynamicFeePct}%, fee/TVL ${feeTvl}%)` });
+        return false;
+      }
+
       // Active strategy token_criteria enforcement
       const tc = activeStrategy?.token_criteria;
       if (tc) {
@@ -741,7 +759,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
           : null;
         block = [
           `POOL: ${pool.name} (${pool.pool})`,
-          `  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.active_tvl}, volatility=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}`,
+          `  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.active_tvl}, volatility=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}, fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"})`,
           `  audit: top10=${top10Pct}%, bots=${botPct}%, fees=${feesSol}SOL${launchpad ? `, launchpad=${launchpad}` : ""}`,
           gmgnPriceLine,
           pvpLine,
@@ -1202,6 +1220,83 @@ function computeBinsBelow(volatility) {
   const lo = config.strategy.minBinsBelow;
   const hi = config.strategy.maxBinsBelow;
   return Math.max(lo, Math.min(hi, Math.round(lo + ((Number(volatility) || 0) / 5) * (hi - lo))));
+}
+
+function computeCandidateFragility(pool = {}, ti = null) {
+  let score = 0;
+  const reasons = [];
+
+  const mcap = Number(pool.mcap);
+  if (Number.isFinite(mcap)) {
+    if (mcap < 300000) { score += 20; reasons.push("microcap"); }
+    else if (mcap < 750000) { score += 12; reasons.push("smallcap"); }
+    else if (mcap < 1500000) { score += 6; reasons.push("mid-small cap"); }
+  }
+
+  const ageHours = Number(pool.token_age_hours);
+  if (Number.isFinite(ageHours)) {
+    if (ageHours < 6) { score += 18; reasons.push("very young token"); }
+    else if (ageHours < 24) { score += 10; reasons.push("young token"); }
+    else if (ageHours < 72) { score += 5; reasons.push("early token"); }
+  }
+
+  const tvl = Number(pool.active_tvl ?? pool.tvl);
+  if (Number.isFinite(tvl)) {
+    if (tvl < 25000) { score += 15; reasons.push("thin TVL"); }
+    else if (tvl < 75000) { score += 8; reasons.push("moderate TVL"); }
+  }
+
+  const bots = Number(pool.gmgn_bot_holders_pct ?? ti?.audit?.bot_holders_pct);
+  if (Number.isFinite(bots)) {
+    if (bots > 35) { score += 12; reasons.push("high bots"); }
+    else if (bots > 25) { score += 6; reasons.push("elevated bots"); }
+  }
+
+  const bundler = Number(pool.gmgn_token_info_bundler_pct ?? pool.gmgn_bundler_pct);
+  if (Number.isFinite(bundler)) {
+    if (bundler > 25) { score += 8; reasons.push("high bundler/fresh wallet activity"); }
+    else if (bundler > 15) { score += 4; reasons.push("moderate bundler activity"); }
+  }
+
+  const top10 = Number(pool.gmgn_token_info_top10_pct ?? pool.gmgn_top10_holder_pct ?? ti?.audit?.top_holders_pct);
+  if (Number.isFinite(top10)) {
+    if (top10 > 35) { score += 10; reasons.push("concentrated holders"); }
+    else if (top10 > 25) { score += 5; reasons.push("some holder concentration"); }
+  }
+
+  const organic = Number(pool.organic_score);
+  if (Number.isFinite(organic)) {
+    if (organic < 40) { score += 8; reasons.push("weak organic flow"); }
+    else if (organic < 60) { score += 4; reasons.push("middling organic flow"); }
+  }
+
+  const volatility = Number(pool.volatility);
+  if (Number.isFinite(volatility) && volatility >= 5) {
+    score += 10;
+    reasons.push("high realized volatility");
+  }
+
+  const binStep = Number(pool.bin_step);
+  if (Number.isFinite(binStep) && binStep >= 120) {
+    score += 5;
+    reasons.push("wide bin step");
+  }
+
+  const velocity5m = Number(pool.gmgn_price_action?.priceChangePct ?? pool.price_change_pct);
+  if (Number.isFinite(velocity5m)) {
+    const absVelocity = Math.abs(velocity5m);
+    if (absVelocity >= 12) { score += 12; reasons.push("violent 5m velocity"); }
+    else if (absVelocity >= 7) { score += 7; reasons.push("fast 5m velocity"); }
+  }
+
+  const maxVolumeShare = Number(pool.gmgn_price_action?.maxVolumeShare);
+  if (Number.isFinite(maxVolumeShare)) {
+    if (maxVolumeShare >= 35) { score += 8; reasons.push("candle expansion / crowding"); }
+    else if (maxVolumeShare >= 20) { score += 4; reasons.push("volume concentration"); }
+  }
+
+  const level = score >= 40 ? "ultrafragile" : score >= 20 ? "fast" : "normal";
+  return { score, level, reasons };
 }
 
 // ═══════════════════════════════════════════
