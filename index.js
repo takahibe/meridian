@@ -4,6 +4,7 @@ import readline from "readline";
 import { agentLoop } from "./agent.js";
 import { log } from "./logger.js";
 import { getMyPositions, closePosition, getActiveBin } from "./tools/dlmm.js";
+import { studyTopLPers } from "./tools/study.js";
 import { getWalletBalances, sweepPendingTokens } from "./tools/wallet.js";
 import { getTopCandidates } from "./tools/screening.js";
 import { formatGmgnCandidateForPrompt } from "./tools/gmgn.js";
@@ -733,6 +734,17 @@ export async function runScreeningCycle({ silent = false } = {}) {
       passing.map(({ pool }) => getActiveBin({ pool_address: pool.pool }))
     );
 
+    const lpStudyTargets = passing.slice(0, Math.min(3, passing.length));
+    const lpStudyResults = await Promise.allSettled(
+      lpStudyTargets.map(({ pool }) => studyTopLPers({ pool_address: pool.pool, limit: 4 }))
+    );
+    const lpStudyByPool = new Map();
+    lpStudyTargets.forEach(({ pool }, idx) => {
+      const result = lpStudyResults[idx];
+      if (result?.status === "fulfilled") lpStudyByPool.set(pool.pool, result.value);
+      else if (result?.reason) log("screening", `LPAgent study unavailable for ${pool.name}: ${result.reason.message || result.reason}`);
+    });
+
     // Build compact candidate blocks
     const candidateBlocks = passing.map(({ pool, sw, n, ti, mem }, i) => {
       const botPct = ti?.audit?.bot_holders_pct ?? "?";
@@ -765,6 +777,11 @@ export async function runScreeningCycle({ silent = false } = {}) {
       const pvpLine = pool.is_pvp
         ? `  pvp: HIGH — rival ${pool.pvp_rival_name || pool.pvp_symbol} (${pool.pvp_rival_mint?.slice(0, 8)}...) has pool ${pool.pvp_rival_pool?.slice(0, 8)}..., tvl=$${pool.pvp_rival_tvl}, holders=${pool.pvp_rival_holders}, fees=${pool.pvp_rival_fees}SOL`
         : null;
+      const lpStudy = lpStudyByPool.get(pool.pool);
+      const lpSignal = lpStudy?.screening_signal || null;
+      const lpSignalLine = lpSignal
+        ? `  lpagent: ${lpSignal.confidence}(${lpSignal.score})${lpSignal.reasons?.length ? ` | + ${lpSignal.reasons.join("; ")}` : ""}${lpSignal.risks?.length ? ` | - ${lpSignal.risks.join("; ")}` : ""}`
+        : null;
       let block;
       if (pool.gmgn) {
         block = [
@@ -772,6 +789,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
           formatGmgnCandidateForPrompt(pool),
           pvpLine,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
+          lpSignalLine,
           activeBin != null ? `  active_bin: ${activeBin}` : null,
           n?.narrative ? `  narrative_untrusted: ${sanitizeUntrustedPromptText(n.narrative, 500)}` : `  narrative_untrusted: none`,
           mem ? `  memory_untrusted: ${sanitizeUntrustedPromptText(mem, 500)}` : null,
@@ -790,6 +808,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
           okxTags  ? `  tags: ${okxTags}` : null,
           pool.price_vs_ath_pct != null ? `  ath: price_vs_ath=${pool.price_vs_ath_pct}%${pool.top_cluster_trend ? `, top_cluster=${pool.top_cluster_trend}` : ""}` : null,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
+          lpSignalLine,
           activeBin != null ? `  active_bin: ${activeBin}` : null,
           priceChange != null ? `  1h: price${priceChange >= 0 ? "+" : ""}${priceChange}%, net_buyers=${netBuyers ?? "?"}` : null,
           n?.narrative ? `  narrative_untrusted: ${sanitizeUntrustedPromptText(n.narrative, 500)}` : `  narrative_untrusted: none`,
@@ -825,7 +844,7 @@ PRE-LOADED CANDIDATES (${passing.length} pools):
 ${candidateBlocks.join("\n\n")}
 
 STEPS:
-1. Pick the best candidate based on narrative quality, smart wallets, and pool metrics.
+1. Pick the best candidate based on narrative quality, smart wallets, pool metrics, and LPAgent shortlist signal when present.
 2. Call deploy_position (active_bin is pre-fetched above — no need to call get_active_bin).
    strategy = ${config.strategy.strategy} (always use this, never change it).
    bins_below = round(${config.strategy.minBinsBelow} + (volatility/5)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}].
@@ -885,6 +904,7 @@ STEPS:
 IMPORTANT:
 - Never write "unknown" for OKX. Use real values, omit missing fields, or write exactly "OKX: unavailable".
 - If a candidate was rejected for fragility plus weak fee economics, say that plainly in WHY SKIPPED or REJECTED.
+- Treat LPAgent shortlist signal as a confidence modifier, not a blind override. Penalize stale LP cohorts or weak fee capture, reward deep/healthy cohorts.
 - Keep the whole report compact and highly scannable for Telegram.
       `, config.llm.maxSteps, [], "SCREENER", config.llm.screeningModel, 2048, {
         onToolStart: async ({ name }) => { await liveMessage?.toolStart(name); },

@@ -89,6 +89,7 @@ export async function studyTopLPers({ pool_address, limit = 4 }) {
   });
 
   const patterns = buildPatterns(ranked, historicalOwners, signalData, poolData.overview || {});
+  const screeningSignal = buildScreeningSignal(patterns, poolData.overview || {});
 
   return {
     pool: pool_address,
@@ -98,7 +99,48 @@ export async function studyTopLPers({ pool_address, limit = 4 }) {
     message:
       "LPAgent-backed top LP study from Agent Meridian 30m cached owner aggregates plus owner historical positions.",
     patterns,
+    screening_signal: screeningSignal,
     lpers,
+  };
+}
+
+function buildScreeningSignal(patterns, overview) {
+  const ownerCount = Number(patterns?.owner_count || 0);
+  const avgHoldHours = Number(patterns?.avg_hold_hours || 0);
+  const avgFeePercent = Number(patterns?.avg_fee_percent || 0);
+  const avgRoiPct = Number(patterns?.avg_roi_pct || 0);
+  const holderCount = Number(patterns?.holder_count || 0);
+  const scalperCount = Number(patterns?.scalper_count || 0);
+  const feePct = Number(overview?.feePct || 0);
+
+  let score = 0;
+  const reasons = [];
+  const risks = [];
+
+  if (ownerCount >= 8) { score += 2; reasons.push(`deep LP cohort (${ownerCount})`); }
+  else if (ownerCount >= 4) { score += 1; reasons.push(`some LP cohort depth (${ownerCount})`); }
+  else risks.push(`thin LP cohort (${ownerCount})`);
+
+  if (avgFeePercent >= 8) { score += 2; reasons.push(`top LPers harvest meaningful fees (${round(avgFeePercent, 2)}%)`); }
+  else if (avgFeePercent >= 3) { score += 1; reasons.push(`top LPers collect some fees (${round(avgFeePercent, 2)}%)`); }
+  else risks.push(`top LPers show weak fee capture (${round(avgFeePercent, 2)}%)`);
+
+  if (avgRoiPct >= 10) { score += 1; reasons.push(`cohort ROI positive (${round(avgRoiPct, 2)}%)`); }
+  else if (avgRoiPct < 0) { score -= 1; risks.push(`cohort ROI negative (${round(avgRoiPct, 2)}%)`); }
+
+  if (avgHoldHours >= 24 && avgHoldHours <= 24 * 21) { score += 1; reasons.push(`hold duration looks usable (${round(avgHoldHours, 1)}h avg)`); }
+  else if (avgHoldHours > 24 * 45) { score -= 1; risks.push(`LP cohort is stale (${round(avgHoldHours, 1)}h avg age)`); }
+
+  if (holderCount > scalperCount && holderCount >= 2) reasons.push(`holder cohort dominates (${holderCount} vs ${scalperCount})`);
+  if (scalperCount > holderCount && scalperCount >= 2) risks.push(`mostly scalper cohort (${scalperCount} vs ${holderCount})`);
+  if (feePct > 0 && avgFeePercent > 0 && avgFeePercent < feePct * 3) risks.push(`LPAgent fee capture looks modest versus pool fee (${round(avgFeePercent, 2)}% vs ${round(feePct, 2)}%)`);
+
+  const confidence = score >= 4 ? "strong" : score >= 2 ? "moderate" : score >= 0 ? "weak" : "avoid";
+  return {
+    confidence,
+    score,
+    reasons,
+    risks,
   };
 }
 
