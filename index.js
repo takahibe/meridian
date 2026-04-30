@@ -78,7 +78,8 @@ function buildPrompt() {
 let _cronTasks = [];
 let _managementBusy = false; // prevents overlapping management cycles
 let _screeningBusy = false;  // prevents overlapping screening cycles
-let _screeningLastTriggered = 0; // epoch ms — prevents management from spamming screening
+let _screeningLastStartedAt = 0; // epoch ms — prevents management from spamming screening
+let _screeningLastFinishedAt = 0; // epoch ms — tracks the last completed screening cycle
 let _pollTriggeredAt = 0; // epoch ms — cooldown for poller-triggered management
 const _peakConfirmTimers = new Map();
 const _trailingDropConfirmTimers = new Map();
@@ -231,9 +232,16 @@ export async function runManagementCycle({ silent = false } = {}) {
     positions = livePositions?.positions || [];
 
     if (positions.length === 0) {
-      log("cron", "No open positions — triggering screening cycle");
-      mgmtReport = "No open positions. Triggering screening cycle.";
-      runScreeningCycle().catch((e) => log("cron_error", `Triggered screening failed: ${e.message}`));
+      const sinceLastScreenMs = Date.now() - Math.max(_screeningLastStartedAt, _screeningLastFinishedAt);
+      if (_screeningBusy || sinceLastScreenMs < screeningCooldownMs) {
+        const waitMin = Math.max(1, Math.ceil((screeningCooldownMs - sinceLastScreenMs) / 60000));
+        log("cron", `No open positions — skipping extra screening (busy/cooldown, next eligible in ~${waitMin}m)`);
+        mgmtReport = `No open positions. Screening already running or recently completed, next eligible in ~${waitMin}m.`;
+      } else {
+        log("cron", "No open positions — triggering screening cycle");
+        mgmtReport = "No open positions. Triggering screening cycle.";
+        runScreeningCycle().catch((e) => log("cron_error", `Triggered screening failed: ${e.message}`));
+      }
       return mgmtReport;
     }
 
@@ -462,9 +470,12 @@ After executing, write a brief one-line result per position.
     // Trigger screening after management
     const afterPositions = await getMyPositions({ force: true }).catch(() => null);
     const afterCount = afterPositions?.positions?.length ?? 0;
-    if (afterCount < config.risk.maxPositions && Date.now() - _screeningLastTriggered > screeningCooldownMs) {
+    const sinceLastScreenMs = Date.now() - Math.max(_screeningLastStartedAt, _screeningLastFinishedAt);
+    if (afterCount < config.risk.maxPositions && !_screeningBusy && sinceLastScreenMs > screeningCooldownMs) {
       log("cron", `Post-management: ${afterCount}/${config.risk.maxPositions} positions — triggering screening`);
       runScreeningCycle().catch((e) => log("cron_error", `Triggered screening failed: ${e.message}`));
+    } else if (afterCount < config.risk.maxPositions) {
+      log("cron", `Post-management: screening not triggered (busy/cooldown, last screen ${Math.round(sinceLastScreenMs / 1000)}s ago)`);
     }
   } catch (error) {
     log("cron_error", `Management cycle failed: ${error.message}`);
@@ -492,7 +503,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
     return null;
   }
   _screeningBusy = true; // set immediately — prevents TOCTOU race with concurrent callers
-  _screeningLastTriggered = Date.now();
+  _screeningLastStartedAt = Date.now();
 
   // Hard guards — don't even run the agent if preconditions aren't met
   let prePositions, preBalance;
@@ -888,6 +899,7 @@ IMPORTANT:
     screenReport = `Screening cycle failed: ${error.message}`;
   } finally {
     _screeningBusy = false;
+    _screeningLastFinishedAt = Date.now();
     if (!silent && telegramEnabled()) {
       if (screenReport) {
         if (liveMessage) await liveMessage.finalize(stripThink(screenReport)).catch(() => {});
