@@ -650,6 +650,12 @@ export async function runScreeningCycle({ silent = false } = {}) {
       const feePct = Number(pool.fee_pct ?? 0);
       const feeTvl = Number(pool.fee_active_tvl_ratio ?? pool.fee_tvl_ratio ?? 0);
       const dynamicFeePct = Math.max(0, feePct - Number(pool.base_fee ?? feePct));
+      const deadFeeEngine = feeTvl <= 0.02 && dynamicFeePct <= 0.02;
+      if (fragility.score >= 30 && deadFeeEngine && feePct <= 0.4) {
+        log("screening", `Fragility veto: dropped ${pool.name} — fast/ultrafragile (${fragility.score}) with dead fee engine (fee=${feePct}%, dynamic=${dynamicFeePct}%, fee/TVL=${feeTvl}%)`);
+        filteredOut.push({ name: pool.name, reason: `fragility ${fragility.score} with dead fee engine (fee ${feePct}%, dynamic ${dynamicFeePct}%, fee/TVL ${feeTvl}%)` });
+        return false;
+      }
       if (fragility.score >= 40 && feeTvl < Math.max(0.15, Number(config.screening.minFeeActiveTvlRatio ?? 0)) && feePct <= 0.4 && dynamicFeePct <= 0.05) {
         log("screening", `Fragility veto: dropped ${pool.name} — ultrafragile (${fragility.score}) with weak fee economics (fee=${feePct}%, dynamic=${dynamicFeePct}%, fee/TVL=${feeTvl}%)`);
         filteredOut.push({ name: pool.name, reason: `ultrafragile ${fragility.score} with weak fee economics (fee ${feePct}%, dynamic ${dynamicFeePct}%, fee/TVL ${feeTvl}%)` });
