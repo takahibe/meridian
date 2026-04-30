@@ -586,6 +586,9 @@ export async function deployPosition({
   top10_pct,
   bot_holders_pct,
   bundler_pct,
+  velocity_5m_pct,
+  acceleration_1m_pct,
+  max_volume_share_pct,
   deploy_source,
 }) {
   pool_address = normalizeMint(pool_address);
@@ -929,6 +932,9 @@ export async function deployPosition({
       top10_pct,
       bot_holders_pct,
       bundler_pct,
+      velocity_5m_pct,
+      acceleration_1m_pct,
+      max_volume_share_pct,
       deploy_source,
       management_config: config.management,
     });

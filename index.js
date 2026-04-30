@@ -1708,6 +1708,9 @@ async function deployLatestCandidate(index) {
     top10_pct: candidate.gmgn_token_info_top10_pct ?? candidate.gmgn_top10_holder_pct ?? null,
     bot_holders_pct: candidate.gmgn_bot_holders_pct ?? null,
     bundler_pct: candidate.gmgn_token_info_bundler_pct ?? candidate.gmgn_bundler_pct ?? null,
+    velocity_5m_pct: candidate.gmgn_price_action?.priceChangePct ?? candidate.price_change_pct ?? null,
+    acceleration_1m_pct: candidate.gmgn_price_action?.rsi2 != null ? (50 - Number(candidate.gmgn_price_action.rsi2)) / 10 : null,
+    max_volume_share_pct: candidate.gmgn_price_action?.maxVolumeShare ?? null,
   });
   if (result?.success === false || result?.error) {
     throw new Error(result.error || "Deploy failed");

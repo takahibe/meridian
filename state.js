@@ -89,6 +89,26 @@ function computeFragility(position = {}) {
     reasons.push("wide bin step");
   }
 
+  const velocity5m = Number(position.velocity_5m_pct);
+  if (Number.isFinite(velocity5m)) {
+    const absVelocity = Math.abs(velocity5m);
+    if (absVelocity >= 12) { score += 12; reasons.push("violent 5m velocity"); }
+    else if (absVelocity >= 7) { score += 7; reasons.push("fast 5m velocity"); }
+  }
+
+  const accel1m = Number(position.acceleration_1m_pct);
+  if (Number.isFinite(accel1m)) {
+    const absAccel = Math.abs(accel1m);
+    if (absAccel >= 6) { score += 10; reasons.push("sharp 1m acceleration"); }
+    else if (absAccel >= 3) { score += 5; reasons.push("notable 1m acceleration"); }
+  }
+
+  const maxVolumeShare = Number(position.max_volume_share_pct);
+  if (Number.isFinite(maxVolumeShare)) {
+    if (maxVolumeShare >= 35) { score += 8; reasons.push("candle expansion / crowding"); }
+    else if (maxVolumeShare >= 20) { score += 4; reasons.push("volume concentration"); }
+  }
+
   const level = score >= 40 ? "ultrafragile" : score >= 20 ? "fast" : "normal";
   return { score, level, reasons };
 }
@@ -225,6 +245,9 @@ export function trackPosition({
   top10_pct = null,
   bot_holders_pct = null,
   bundler_pct = null,
+  velocity_5m_pct = null,
+  acceleration_1m_pct = null,
+  max_volume_share_pct = null,
   signal_snapshot = null,
   deploy_source = "auto",
   management_config = null,
@@ -241,6 +264,9 @@ export function trackPosition({
     top10_pct,
     bot_holders_pct,
     bundler_pct,
+    velocity_5m_pct,
+    acceleration_1m_pct,
+    max_volume_share_pct,
   });
   const bandConfig = applyFragilityToBand(getBandConfig(managementBand, management_config?.managementBands), fragility);
 
@@ -266,6 +292,9 @@ export function trackPosition({
     top10_pct,
     bot_holders_pct,
     bundler_pct,
+    velocity_5m_pct,
+    acceleration_1m_pct,
+    max_volume_share_pct,
     fragility_score: fragility.score,
     fragility_level: fragility.level,
     fragility_reasons: fragility.reasons,
