@@ -4,6 +4,7 @@ import readline from "readline";
 import { agentLoop } from "./agent.js";
 import { log } from "./logger.js";
 import { getMyPositions, closePosition, getActiveBin } from "./tools/dlmm.js";
+import { computeBinsBelow, setRecommendedBins } from "./tools/bin-policy.js";
 import { studyTopLPers } from "./tools/study.js";
 import { getWalletBalances, sweepPendingTokens } from "./tools/wallet.js";
 import { getTopCandidates } from "./tools/screening.js";
@@ -621,6 +622,9 @@ export async function runScreeningCycle({ silent = false } = {}) {
       pool.entry_fragility_score = fragility.score;
       pool.entry_fragility_level = fragility.level;
       pool.entry_fragility_reasons = fragility.reasons;
+      const recommendedBinsBelow = computeBinsBelow(pool.volatility, fragility);
+      pool.recommended_bins_below = recommendedBinsBelow;
+      setRecommendedBins(pool.pool, { bins: recommendedBinsBelow, fragility, volatility: pool.volatility });
 
       const launchpad = ti?.launchpad ?? null;
       if (launchpad && config.screening.allowedLaunchpads?.length > 0 && !config.screening.allowedLaunchpads.includes(launchpad)) {
@@ -745,6 +749,36 @@ export async function runScreeningCycle({ silent = false } = {}) {
       else if (result?.reason) log("screening", `LPAgent study unavailable for ${pool.name}: ${result.reason.message || result.reason}`);
     });
 
+    // Weak-batch skip: if every survivor lacks all quality signals (organic,
+    // mcap, smart wallets, KOL, narrative, LPAgent confidence), don't force a
+    // deploy from a bad pool of options.
+    if (config.screening.weakBatchSkip !== false) {
+      const hasAnyQualitySignal = passing.some(({ pool, sw, n }) => {
+        const organic = Number(pool.organic_score);
+        const mcap = Number(pool.mcap);
+        const smart = (sw?.in_pool?.length ?? 0) > 0;
+        const kol = !!pool.kol_in_clusters;
+        const narrative = !!n?.narrative;
+        const lpSignal = lpStudyByPool.get(pool.pool)?.screening_signal;
+        const lpStrong = lpSignal && /high|strong/i.test(String(lpSignal.confidence || ""));
+        return (Number.isFinite(organic) && organic >= 40)
+          || (Number.isFinite(mcap) && mcap >= 300000)
+          || smart || kol || narrative || lpStrong;
+      });
+      if (!hasAnyQualitySignal) {
+        const leaders = passing.slice(0, 3).map(({ pool, sw }) => `- ${pool.name}: organic=${pool.organic_score ?? 0}, mcap=$${pool.mcap ?? 0}, smart=${sw?.in_pool?.length ?? 0}, fragility=${pool.entry_fragility_level}(${pool.entry_fragility_score})`).join("\n");
+        const msg = `No candidates worth deploying — weak batch.\nLeaders had no organic/mcap/smart-wallet/narrative/LPAgent signal:\n${leaders}`;
+        log("screening", msg);
+        appendDecision({
+          type: "no_deploy",
+          actor: "SCREENER",
+          summary: "Weak batch — skipping deploy",
+          reason: msg,
+        });
+        return msg;
+      }
+    }
+
     // Build compact candidate blocks
     const candidateBlocks = passing.map(({ pool, sw, n, ti, mem }, i) => {
       const botPct = ti?.audit?.bot_holders_pct ?? "?";
@@ -787,6 +821,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
         block = [
           `POOL: ${pool.name} (${pool.pool})`,
           formatGmgnCandidateForPrompt(pool),
+          `  fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"}), recommended_bins_below=${pool.recommended_bins_below ?? "?"}`,
           pvpLine,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
           lpSignalLine,
@@ -800,7 +835,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
           : null;
         block = [
           `POOL: ${pool.name} (${pool.pool})`,
-          `  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.active_tvl}, volatility=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}, fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"})`,
+          `  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.active_tvl}, volatility=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}, fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"}), recommended_bins_below=${pool.recommended_bins_below ?? "?"}`,
           `  audit: top10=${top10Pct}%, bots=${botPct}%, fees=${feesSol}SOL${launchpad ? `, launchpad=${launchpad}` : ""}`,
           gmgnPriceLine,
           pvpLine,
@@ -847,7 +882,7 @@ STEPS:
 1. Pick the best candidate based on narrative quality, smart wallets, pool metrics, and LPAgent shortlist signal when present.
 2. Call deploy_position (active_bin is pre-fetched above — no need to call get_active_bin).
    strategy = ${config.strategy.strategy} (always use this, never change it).
-   bins_below = round(${config.strategy.minBinsBelow} + (volatility/5)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}].
+   bins_below: omit (or use the candidate's recommended_bins_below). The runtime caps width based on volatility AND fragility — high-vol fragile pools must be tighter, not wider. You may pass a SMALLER value to tighten further; larger values are clamped down.
    bins_above = 0. Single-side SOL only: set amount_y, keep amount_x = 0.
 3. Report in this exact format (no tables, no extra sections):
    🚀 DEPLOYED
@@ -1259,12 +1294,6 @@ function buildGmgnFunnelReport(stageCounts, allFiltered = [], { fromStage = 1 } 
     .map(([key, items]) => `${stageLabels[key] || key}:\n${items.map(r => `  • ${r}`).join("\n")}`)
     .join("\n");
   return details ? `${funnel}\n\n${details}` : funnel;
-}
-
-function computeBinsBelow(volatility) {
-  const lo = config.strategy.minBinsBelow;
-  const hi = config.strategy.maxBinsBelow;
-  return Math.max(lo, Math.min(hi, Math.round(lo + ((Number(volatility) || 0) / 5) * (hi - lo))));
 }
 
 function computeCandidateFragility(pool = {}, ti = null) {

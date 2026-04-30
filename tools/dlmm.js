@@ -26,6 +26,7 @@ import {
 import { recordPerformance } from "../lessons.js";
 import { isBaseMintOnCooldown, isPoolOnCooldown } from "../pool-memory.js";
 import { normalizeMint } from "./wallet.js";
+import { computeBinsBelow, getRecommendedBins } from "./bin-policy.js";
 import { appendDecision } from "../decision-log.js";
 
 // ─── Lazy SDK loader ───────────────────────────────────────────
@@ -593,7 +594,20 @@ export async function deployPosition({
 }) {
   pool_address = normalizeMint(pool_address);
   const activeStrategy = strategy || config.strategy.strategy;
-  let activeBinsBelow = bins_below ?? config.strategy.minBinsBelow;
+  // Clamp LLM-supplied bins_below to the policy recommendation. The LLM may
+  // request tighter (smaller) but never wider than what screening computed
+  // from volatility + fragility. Falls back to volatility-only if the
+  // screening cache miss (e.g. manual deploy).
+  const cached = getRecommendedBins(pool_address);
+  const recommendedBinsBelow = cached?.bins ?? computeBinsBelow(volatility, null);
+  const requested = bins_below;
+  let activeBinsBelow = recommendedBinsBelow;
+  if (requested != null && Number.isFinite(Number(requested))) {
+    activeBinsBelow = Math.min(Number(requested), recommendedBinsBelow);
+  }
+  if (requested != null && Number(requested) > recommendedBinsBelow) {
+    log("deploy", `bins_below clamped: requested=${requested} → recommended=${recommendedBinsBelow} (volatility=${volatility ?? cached?.volatility ?? "?"}, fragility=${cached?.fragility?.level ?? "n/a"})`);
+  }
   let activeBinsAbove = bins_above ?? 0;
 
   if (isPoolOnCooldown(pool_address)) {

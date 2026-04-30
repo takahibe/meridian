@@ -131,7 +131,7 @@ POOL MEMORY: Past losses or problems → strong skip signal.
 DEPLOY RULES:
 - COMPOUNDING: Use the deploy amount from the goal EXACTLY. Do NOT default to a smaller number.
 - lp_strategy MUST be "${config.strategy.strategy}" — NEVER change this to spot, curve, or any other value unless the ACTIVE STRATEGY in the goal explicitly overrides it.
-- bins_below = round(${config.strategy.minBinsBelow} + (volatility/5)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}]. bins_above = 0.
+- bins_below: omit (preferred) or pass the candidate's recommended_bins_below. The runtime caps width using volatility AND fragility — fragile pools get tighter ranges, not wider. You can request a SMALLER value to tighten; larger values get clamped down. bins_above = 0.
 - Bin steps must be [${config.screening.minBinStep}-${config.screening.maxBinStep}].
 - Pick ONE pool. Deploy or explain why none qualify.
 
