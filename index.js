@@ -678,6 +678,12 @@ export async function runScreeningCycle({ silent = false } = {}) {
       return true;
     });
 
+    const vetoExamples = filteredOut
+      .filter((entry) => /fragility veto|ultrafragile|fragile .*sleepy/i.test(entry.reason))
+      .slice(0, 3)
+      .map((entry) => `- ${entry.name}: ${entry.reason}`)
+      .join("\n");
+
     if (passing.length === 0) {
       const combined = filteredOut.length > 0 ? filteredOut : earlyFilteredExamples;
       const combinedExamples = combined.slice(0, 5)
@@ -686,10 +692,10 @@ export async function runScreeningCycle({ silent = false } = {}) {
       const funnelBlock = buildGmgnFunnelReport(gmgnStageCounts, gmgnAllFiltered, { fromStage: 2 });
       const thresholds = `Thresholds: tvl>$${config.screening.minTvl} | vol>$${config.screening.minVolume} | organic>${config.screening.minOrganic}% | holders>${config.screening.minHolders} | fee/tvl>${config.screening.minFeeActiveTvlRatio}%`;
       screenReport = funnelBlock
-        ? `No candidates available.\n\n${funnelBlock}`
+        ? `No candidates available.\n\n${funnelBlock}${vetoExamples ? `\n\nFragility vetoes:\n${vetoExamples}` : ""}`
         : combinedExamples
-          ? `No candidates available.\nFiltered examples:\n${combinedExamples}`
-          : `No candidates available (all filtered).\n${thresholds}`;
+          ? `No candidates available.\nFiltered examples:\n${combinedExamples}${vetoExamples ? `\n\nFragility vetoes:\n${vetoExamples}` : ""}`
+          : `No candidates available (all filtered).\n${thresholds}${vetoExamples ? `\n\nFragility vetoes:\n${vetoExamples}` : ""}`;
       appendDecision({
         type: "no_deploy",
         actor: "SCREENER",
@@ -861,6 +867,7 @@ STEPS:
    <short flat list of top candidate names and why they were skipped>
 IMPORTANT:
 - Never write "unknown" for OKX. Use real values, omit missing fields, or write exactly "OKX: unavailable".
+- If a candidate was rejected for fragility plus weak fee economics, say that plainly in WHY SKIPPED or REJECTED.
 - Keep the whole report compact and highly scannable for Telegram.
       `, config.llm.maxSteps, [], "SCREENER", config.llm.screeningModel, 2048, {
         onToolStart: async ({ name }) => { await liveMessage?.toolStart(name); },
