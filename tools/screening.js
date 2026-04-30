@@ -20,14 +20,55 @@ function normalizeSymbol(symbol) {
 }
 
 function scoreCandidate(pool) {
+  let score;
   if (Number.isFinite(Number(pool.gmgn_score))) {
-    return Number(pool.gmgn_score) + Number(pool.fee_active_tvl_ratio || 0) * 500;
+    score = Number(pool.gmgn_score) + Number(pool.fee_active_tvl_ratio || 0) * 500;
+  } else {
+    const feeTvl = Number(pool.fee_active_tvl_ratio || 0);
+    const organic = Number(pool.organic_score || 0);
+    const volume = Number(pool.volume_window || 0);
+    const holders = Number(pool.holders || 0);
+    score = feeTvl * 1000 + organic * 10 + volume / 100 + holders / 100;
   }
-  const feeTvl = Number(pool.fee_active_tvl_ratio || 0);
-  const organic = Number(pool.organic_score || 0);
-  const volume = Number(pool.volume_window || 0);
-  const holders = Number(pool.holders || 0);
-  return feeTvl * 1000 + organic * 10 + volume / 100 + holders / 100;
+  if (pool.source_overlap) score += 5000;
+  else if (pool.source_type === "meteora") score += 500;
+  else if (pool.source_type === "gmgn") score -= 250;
+  return score;
+}
+
+function mergeHybridPools(meteoraPools = [], gmgnPools = []) {
+  const byPool = new Map();
+  const byMint = new Map();
+
+  for (const pool of meteoraPools) {
+    const merged = { ...pool, source_type: "meteora", source_overlap: false, source_tags: ["meteora"] };
+    byPool.set(pool.pool, merged);
+    if (pool.base?.mint) byMint.set(pool.base.mint, merged);
+  }
+
+  for (const pool of gmgnPools) {
+    const existingByPool = byPool.get(pool.pool);
+    const existingByMint = pool.base?.mint ? byMint.get(pool.base.mint) : null;
+    const existing = existingByPool || existingByMint;
+    if (existing) {
+      Object.assign(existing, {
+        ...existing,
+        ...pool,
+        source_type: "intersection",
+        source_overlap: true,
+        source_tags: Array.from(new Set([...(existing.source_tags || []), "meteora", "gmgn"])),
+      });
+      if (pool.pool && existing.pool !== pool.pool) {
+        existing.gmgn_alt_pool = pool.pool;
+      }
+      continue;
+    }
+    const merged = { ...pool, source_type: "gmgn", source_overlap: false, source_tags: ["gmgn"] };
+    byPool.set(pool.pool, merged);
+    if (pool.base?.mint) byMint.set(pool.base.mint, merged);
+  }
+
+  return Array.from(byPool.values());
 }
 
 async function fetchDiscordSignalCandidates() {
@@ -274,13 +315,38 @@ export async function getTopCandidates({ limit = 10 } = {}) {
     throw new Error(`Invalid screeningSource: ${config.screening.source}. Use meteora, gmgn, or hybrid.`);
   }
   const gmgnLimit = Math.max(limit, config.gmgn.enrichLimit || 20);
-  const discovery = source === "gmgn"
-    ? await discoverGmgnPools({ limit: gmgnLimit })
-    : source === "hybrid"
-      ? await discoverGmgnPools({ limit: gmgnLimit, expandPoolsPerToken: true, poolsPerToken: config.gmgn.poolsPerToken || 3 })
-      : await discoverPools({ page_size: 50 });
-  let { pools } = discovery;
-  const filteredOut = Array.isArray(discovery.filtered_examples) ? [...discovery.filtered_examples] : [];
+  let discovery;
+  let pools;
+  let filteredOut = [];
+
+  if (source === "gmgn") {
+    discovery = await discoverGmgnPools({ limit: gmgnLimit });
+    pools = discovery.pools;
+    filteredOut = Array.isArray(discovery.filtered_examples) ? [...discovery.filtered_examples] : [];
+  } else if (source === "hybrid") {
+    const [meteoraDiscovery, gmgnDiscovery] = await Promise.all([
+      discoverPools({ page_size: 50 }),
+      discoverGmgnPools({ limit: gmgnLimit, expandPoolsPerToken: true, poolsPerToken: config.gmgn.poolsPerToken || 3 }),
+    ]);
+    pools = mergeHybridPools(meteoraDiscovery.pools || [], gmgnDiscovery.pools || []);
+    filteredOut = [
+      ...(Array.isArray(meteoraDiscovery.filtered_examples) ? meteoraDiscovery.filtered_examples : []),
+      ...(Array.isArray(gmgnDiscovery.filtered_examples) ? gmgnDiscovery.filtered_examples : []),
+    ];
+    discovery = {
+      total: pools.length,
+      pools,
+      stage_counts: gmgnDiscovery.stage_counts || null,
+      meteora_total: meteoraDiscovery.total ?? meteoraDiscovery.pools?.length ?? 0,
+      gmgn_total: gmgnDiscovery.total ?? gmgnDiscovery.pools?.length ?? 0,
+      intersection_count: pools.filter((p) => p.source_overlap).length,
+    };
+    log("screening", `hybrid merge: meteora=${meteoraDiscovery.pools?.length || 0}, gmgn=${gmgnDiscovery.pools?.length || 0}, merged=${pools.length}, intersections=${discovery.intersection_count}`);
+  } else {
+    discovery = await discoverPools({ page_size: 50 });
+    pools = discovery.pools;
+    filteredOut = Array.isArray(discovery.filtered_examples) ? [...discovery.filtered_examples] : [];
+  }
 
   // Token blacklist + dev blocklist (Meteora path runs these inside discoverPools; GMGN path does not)
   if (source === "gmgn" || source === "hybrid") {
@@ -350,12 +416,13 @@ export async function getTopCandidates({ limit = 10 } = {}) {
     }
   }
 
-  // Enrich with OKX data — advanced info (risk/bundle/sniper) + ATH price (no API key required)
-  // Skipped for GMGN/hybrid: bundler/bot/wash data already sourced from GMGN pipeline
-  if (source === "meteora" && eligible.length > 0) {
+  // Enrich with OKX data for pure Meteora candidates and hybrid Meteora/intersection candidates.
+  // Pure GMGN candidates already carry much of this upstream.
+  if ((source === "meteora" || source === "hybrid") && eligible.length > 0) {
     const { getAdvancedInfo, getPriceInfo, getClusterList, getRiskFlags } = await import("./okx.js");
     const okxResults = await Promise.allSettled(
       eligible.map(async (p) => {
+        if (source === "hybrid" && p.source_type === "gmgn") return { adv: null, price: null, clusters: [], risk: null };
         if (!p.base?.mint) return { adv: null, price: null, clusters: [], risk: null };
         const [adv, price, clusters, risk] = await Promise.allSettled([
           getAdvancedInfo(p.base.mint),
@@ -518,7 +585,12 @@ export async function getTopCandidates({ limit = 10 } = {}) {
     total_screened: discovery.total ?? pools.length,
     source,
     filtered_examples: filteredOut.slice(0, 3),
-    stage_counts: discovery.stage_counts ? { ranked: discovery.total, ...discovery.stage_counts } : null,
+    stage_counts: discovery.stage_counts ? { ranked: discovery.gmgn_total ?? discovery.total, ...discovery.stage_counts } : null,
+    hybrid_meta: source === "hybrid" ? {
+      meteora_total: discovery.meteora_total ?? 0,
+      gmgn_total: discovery.gmgn_total ?? 0,
+      intersection_count: discovery.intersection_count ?? 0,
+    } : null,
     all_filtered: filteredOut,
   };
 }
