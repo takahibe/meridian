@@ -581,6 +581,11 @@ export async function deployPosition({
   fee_tvl_ratio,
   organic_score,
   initial_value_usd,
+  mcap,
+  token_age_hours,
+  top10_pct,
+  bot_holders_pct,
+  bundler_pct,
   deploy_source,
 }) {
   pool_address = normalizeMint(pool_address);
@@ -919,6 +924,11 @@ export async function deployPosition({
       amount_x: finalAmountX,
       active_bin: activeBin.binId,
       initial_value_usd,
+      mcap,
+      token_age_hours,
+      top10_pct,
+      bot_holders_pct,
+      bundler_pct,
       deploy_source,
       management_config: config.management,
     });

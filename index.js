@@ -126,11 +126,12 @@ function schedulePeakConfirmation(positionAddress) {
   _peakConfirmTimers.set(positionAddress, timer);
 }
 
-function scheduleTrailingDropConfirmation(positionAddress, trailingDropPct = config.management.trailingDropPct, currentPnlPct = null) {
+function scheduleTrailingDropConfirmation(positionAddress, trailingDropPct = config.management.trailingDropPct, currentPnlPct = null, confirmationDelayMs = null) {
   if (!positionAddress || _trailingDropConfirmTimers.has(positionAddress)) return;
 
   const hardExit = Number.isFinite(currentPnlPct) && Number.isFinite(trailingDropPct) && currentPnlPct <= TRAILING_HARD_EXIT_NEGATIVE_PNL_PCT;
-  const delayMs = hardExit ? 0 : TRAILING_DROP_CONFIRM_DELAY_MS;
+  const requestedDelay = Number.isFinite(confirmationDelayMs) ? confirmationDelayMs : TRAILING_DROP_CONFIRM_DELAY_MS;
+  const delayMs = hardExit ? 0 : requestedDelay;
 
   const runCheck = async () => {
     _trailingDropConfirmTimers.delete(positionAddress);
@@ -188,14 +189,18 @@ async function maybeRunMissedBriefing() {
 
   if (lastSent === todayUtc) return; // already sent today
 
-  // Only fire if local UTC+8 time is past 08:00 (Singapore has no DST, stable offset)
-  const localHour = parseInt(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Singapore", hour: "numeric", hour12: false }),
-    10,
-  );
-  if (!Number.isFinite(localHour) || localHour < 8) return; // too early, cron will handle it
+  const localNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Singapore" }));
+  const localHour = localNow.getHours();
+  const localMinute = localNow.getMinutes();
+  const minutesSinceEight = (localHour * 60 + localMinute) - (8 * 60);
 
-  log("cron", `Missed briefing detected (last sent: ${lastSent || "never"}) — sending now`);
+  if (!Number.isFinite(minutesSinceEight) || minutesSinceEight < 0) return; // too early
+  if (minutesSinceEight > 30) {
+    log("cron", `Missed briefing skipped for today (outside catch-up window, local UTC+8 ${String(localHour).padStart(2, "0")}:${String(localMinute).padStart(2, "0")})`);
+    return;
+  }
+
+  log("cron", `Missed briefing detected within catch-up window (last sent: ${lastSent || "never"}) — sending now`);
   await runBriefing();
 }
 
@@ -252,7 +257,7 @@ export async function runManagementCycle({ silent = false } = {}) {
       if (exit) {
         if (exit.action === "TRAILING_TP" && exit.needs_confirmation && shouldUsePnlRecheck()) {
           if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, exit.trailing_drop_pct ?? config.management.trailingDropPct)) {
-            scheduleTrailingDropConfirmation(p.position, exit.trailing_drop_pct ?? config.management.trailingDropPct, exit.current_pnl_pct);
+            scheduleTrailingDropConfirmation(p.position, exit.trailing_drop_pct ?? config.management.trailingDropPct, exit.current_pnl_pct, exit.confirmation_delay_ms);
           }
           continue;
         }
@@ -933,7 +938,7 @@ Summarize the current portfolio health, total fees earned, and performance of al
         if (exit) {
           if (exit.action === "TRAILING_TP" && exit.needs_confirmation && shouldUsePnlRecheck()) {
             if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, exit.trailing_drop_pct ?? config.management.trailingDropPct)) {
-              scheduleTrailingDropConfirmation(p.position, exit.trailing_drop_pct ?? config.management.trailingDropPct, exit.current_pnl_pct);
+              scheduleTrailingDropConfirmation(p.position, exit.trailing_drop_pct ?? config.management.trailingDropPct, exit.current_pnl_pct, exit.confirmation_delay_ms);
             }
             continue;
           }
@@ -1698,6 +1703,11 @@ async function deployLatestCandidate(index) {
     fee_tvl_ratio: candidate.fee_active_tvl_ratio ?? candidate.fee_tvl_ratio,
     organic_score: candidate.organic_score,
     initial_value_usd: candidate.active_tvl ?? candidate.tvl ?? null,
+    mcap: candidate.mcap ?? null,
+    token_age_hours: candidate.token_age_hours ?? null,
+    top10_pct: candidate.gmgn_token_info_top10_pct ?? candidate.gmgn_top10_holder_pct ?? null,
+    bot_holders_pct: candidate.gmgn_bot_holders_pct ?? null,
+    bundler_pct: candidate.gmgn_token_info_bundler_pct ?? candidate.gmgn_bundler_pct ?? null,
   });
   if (result?.success === false || result?.error) {
     throw new Error(result.error || "Deploy failed");

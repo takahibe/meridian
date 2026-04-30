@@ -29,6 +29,87 @@ function getBandConfig(bandKey, managementBands = {}) {
   return { key: "B", ...(managementBands.bandB || {}) };
 }
 
+function computeFragility(position = {}) {
+  let score = 0;
+  const reasons = [];
+
+  const mcap = Number(position.mcap);
+  if (Number.isFinite(mcap)) {
+    if (mcap < 300_000) { score += 20; reasons.push("microcap"); }
+    else if (mcap < 750_000) { score += 12; reasons.push("smallcap"); }
+    else if (mcap < 1_500_000) { score += 6; reasons.push("mid-small cap"); }
+  }
+
+  const ageHours = Number(position.token_age_hours);
+  if (Number.isFinite(ageHours)) {
+    if (ageHours < 6) { score += 18; reasons.push("very young token"); }
+    else if (ageHours < 24) { score += 10; reasons.push("young token"); }
+    else if (ageHours < 72) { score += 5; reasons.push("early token"); }
+  }
+
+  const tvl = Number(position.initial_value_usd ?? position.active_tvl_usd);
+  if (Number.isFinite(tvl)) {
+    if (tvl < 25_000) { score += 15; reasons.push("thin TVL"); }
+    else if (tvl < 75_000) { score += 8; reasons.push("moderate TVL"); }
+  }
+
+  const bots = Number(position.bot_holders_pct);
+  if (Number.isFinite(bots)) {
+    if (bots > 35) { score += 12; reasons.push("high bots"); }
+    else if (bots > 25) { score += 6; reasons.push("elevated bots"); }
+  }
+
+  const bundler = Number(position.bundler_pct);
+  if (Number.isFinite(bundler)) {
+    if (bundler > 25) { score += 8; reasons.push("high bundler/fresh wallet activity"); }
+    else if (bundler > 15) { score += 4; reasons.push("moderate bundler activity"); }
+  }
+
+  const top10 = Number(position.top10_pct);
+  if (Number.isFinite(top10)) {
+    if (top10 > 35) { score += 10; reasons.push("concentrated holders"); }
+    else if (top10 > 25) { score += 5; reasons.push("some holder concentration"); }
+  }
+
+  const organic = Number(position.organic_score);
+  if (Number.isFinite(organic)) {
+    if (organic < 40) { score += 8; reasons.push("weak organic flow"); }
+    else if (organic < 60) { score += 4; reasons.push("middling organic flow"); }
+  }
+
+  const volatility = Number(position.volatility);
+  if (Number.isFinite(volatility) && volatility >= 5) {
+    score += 10;
+    reasons.push("high realized volatility");
+  }
+
+  const binStep = Number(position.bin_step);
+  if (Number.isFinite(binStep) && binStep >= 120) {
+    score += 5;
+    reasons.push("wide bin step");
+  }
+
+  const level = score >= 40 ? "ultrafragile" : score >= 20 ? "fast" : "normal";
+  return { score, level, reasons };
+}
+
+function applyFragilityToBand(bandConfig = {}, fragility = { score: 0, level: "normal" }) {
+  const adjusted = { ...bandConfig };
+  if (fragility.level === "fast") {
+    if (Number.isFinite(adjusted.trailingTriggerPct)) adjusted.trailingTriggerPct = Math.max(1, adjusted.trailingTriggerPct - 1);
+    if (Number.isFinite(adjusted.trailingDropPct)) adjusted.trailingDropPct = Math.max(0.75, adjusted.trailingDropPct - 0.5);
+    if (Number.isFinite(adjusted.upperOorWaitMinutes)) adjusted.upperOorWaitMinutes = Math.max(2, adjusted.upperOorWaitMinutes - 1);
+    adjusted.fragilityConfirmationDelayMs = 3000;
+  } else if (fragility.level === "ultrafragile") {
+    if (Number.isFinite(adjusted.trailingTriggerPct)) adjusted.trailingTriggerPct = Math.max(1, adjusted.trailingTriggerPct - 2);
+    if (Number.isFinite(adjusted.trailingDropPct)) adjusted.trailingDropPct = Math.max(0.75, adjusted.trailingDropPct - 1);
+    if (Number.isFinite(adjusted.upperOorWaitMinutes)) adjusted.upperOorWaitMinutes = Math.max(1, adjusted.upperOorWaitMinutes - 2);
+    adjusted.fragilityConfirmationDelayMs = 0;
+    adjusted.fragilityForceExitBelowPct = 0;
+  }
+  return adjusted;
+}
+
 const STATE_FILE = "./state.json";
 
 const MAX_RECENT_EVENTS = 20;
@@ -139,13 +220,29 @@ export function trackPosition({
   fee_tvl_ratio,
   organic_score,
   initial_value_usd,
+  mcap = null,
+  token_age_hours = null,
+  top10_pct = null,
+  bot_holders_pct = null,
+  bundler_pct = null,
   signal_snapshot = null,
   deploy_source = "auto",
   management_config = null,
 }) {
   const state = load();
   const managementBand = resolveManagementBand(volatility, management_config?.managementBands);
-  const bandConfig = getBandConfig(managementBand, management_config?.managementBands);
+  const fragility = computeFragility({
+    mcap,
+    token_age_hours,
+    initial_value_usd,
+    organic_score,
+    volatility,
+    bin_step,
+    top10_pct,
+    bot_holders_pct,
+    bundler_pct,
+  });
+  const bandConfig = applyFragilityToBand(getBandConfig(managementBand, management_config?.managementBands), fragility);
 
   state.positions[position] = {
     position,
@@ -164,6 +261,14 @@ export function trackPosition({
     initial_fee_tvl_24h: fee_tvl_ratio,
     organic_score,
     initial_value_usd,
+    mcap,
+    token_age_hours,
+    top10_pct,
+    bot_holders_pct,
+    bundler_pct,
+    fragility_score: fragility.score,
+    fragility_level: fragility.level,
+    fragility_reasons: fragility.reasons,
     signal_snapshot: signal_snapshot || null,
     deployed_at: new Date().toISOString(),
     deploy_source: deploy_source === "manual" ? "manual" : "auto",
@@ -192,7 +297,7 @@ export function trackPosition({
   const rangeWidthBins = Number.isFinite(bin_range?.min) && Number.isFinite(bin_range?.max)
     ? Math.abs(bin_range.max - bin_range.min) + 1
     : null;
-  log("state", `Tracked new position: ${position} in pool ${pool} | vol=${volatility ?? "?"} | band=${managementBand} | range_width_bins=${rangeWidthBins ?? "?"}`);
+  log("state", `Tracked new position: ${position} in pool ${pool} | vol=${volatility ?? "?"} | band=${managementBand} | fragility=${fragility.level}:${fragility.score} | range_width_bins=${rangeWidthBins ?? "?"}`);
 }
 
 /**
@@ -565,9 +670,16 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
   let changed = false;
 
   const managementBand = pos.management_band || resolveManagementBand(pos.volatility, mgmtConfig.managementBands);
-  const bandConfig = getBandConfig(managementBand, mgmtConfig.managementBands);
+  const fragility = computeFragility(pos);
+  const bandConfig = applyFragilityToBand(getBandConfig(managementBand, mgmtConfig.managementBands), fragility);
   if (pos.management_band !== managementBand) {
     pos.management_band = managementBand;
+    changed = true;
+  }
+  if (pos.fragility_score !== fragility.score || pos.fragility_level !== fragility.level) {
+    pos.fragility_score = fragility.score;
+    pos.fragility_level = fragility.level;
+    pos.fragility_reasons = fragility.reasons;
     changed = true;
   }
   pos.management_band_config = bandConfig;
@@ -630,7 +742,8 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
   if (!pnl_pct_suspicious && pos.trailing_active) {
     const dropFromPeak = pos.peak_pnl_pct - currentPnlPct;
     if (dropFromPeak >= trailingDropPct) {
-      const hardExit = currentPnlPct <= -2 || dropFromPeak >= (trailingDropPct * 2.5);
+      const fragilityForceExitBelowPct = bandConfig.fragilityForceExitBelowPct ?? -2;
+      const hardExit = currentPnlPct <= fragilityForceExitBelowPct || dropFromPeak >= (trailingDropPct * 2.5);
       return {
         action: "TRAILING_TP",
         reason: `Trailing TP (Band ${managementBand}): peak ${pos.peak_pnl_pct.toFixed(2)}% → current ${currentPnlPct.toFixed(2)}% (drop ${dropFromPeak.toFixed(2)}% >= ${trailingDropPct}%)`,
@@ -641,6 +754,8 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
         drop_from_peak_pct: dropFromPeak,
         trailing_drop_pct: trailingDropPct,
         management_band: managementBand,
+        fragility_level: fragility.level,
+        confirmation_delay_ms: bandConfig.fragilityConfirmationDelayMs ?? null,
       };
     }
   }
