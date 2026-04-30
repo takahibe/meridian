@@ -701,9 +701,10 @@ export async function deployPosition({
   const upsideCoveragePct = activePrice > 0 ? ((maxPrice - activePrice) / activePrice) * 100 : null;
   const totalWidthPct = minPrice > 0 ? ((maxPrice - minPrice) / minPrice) * 100 : null;
 
-  // Read base fee directly from pool — baseFactor * binStep / 10^6 gives fee in %
+  // Read base fee directly from pool. Meteora baseFactor * binStep / 1e6 yields a decimal rate,
+  // so multiply by 100 only once when converting to percent.
   const baseFactor = pool.lbPair.parameters?.baseFactor ?? 0;
-  const actualBaseFee = base_fee ?? (baseFactor > 0 ? parseFloat((baseFactor * actualBinStep / 1e6 * 100).toFixed(4)) : null);
+  const actualBaseFee = base_fee ?? (baseFactor > 0 ? parseFloat((baseFactor * actualBinStep / 1e6).toFixed(4)) : null);
 
   const totalYLamports = new BN(Math.floor(finalAmountY * 1e9));
   // For X, we assume it's also 9 decimals for now, or we'd need to fetch mint decimals.
