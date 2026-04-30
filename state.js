@@ -29,7 +29,60 @@ function getBandConfig(bandKey, managementBands = {}) {
   return { key: "B", ...(managementBands.bandB || {}) };
 }
 
+function deriveMomentumSignals(position = {}) {
+  const snaps = Array.isArray(position.snapshots) ? position.snapshots.filter(Boolean) : [];
+  const result = {
+    velocity_5m_pct: Number(position.velocity_5m_pct),
+    acceleration_1m_pct: Number(position.acceleration_1m_pct),
+    max_volume_share_pct: Number(position.max_volume_share_pct),
+  };
+
+  if (snaps.length >= 2) {
+    const last = snaps[snaps.length - 1];
+    const prev = snaps[snaps.length - 2];
+    const lastPrice = Number(last?.price);
+    const prevPrice = Number(prev?.price);
+    if (Number.isFinite(lastPrice) && Number.isFinite(prevPrice) && prevPrice > 0) {
+      const movePct = ((lastPrice - prevPrice) / prevPrice) * 100;
+      if (!Number.isFinite(result.velocity_5m_pct)) result.velocity_5m_pct = movePct;
+      if (!Number.isFinite(result.acceleration_1m_pct)) result.acceleration_1m_pct = movePct;
+    }
+  }
+
+  if (snaps.length >= 3) {
+    const recent = snaps.slice(-3);
+    const oldest = Number(recent[0]?.price);
+    const newest = Number(recent[recent.length - 1]?.price);
+    if (Number.isFinite(oldest) && Number.isFinite(newest) && oldest > 0) {
+      const movePct = ((newest - oldest) / oldest) * 100;
+      result.velocity_5m_pct = Number.isFinite(result.velocity_5m_pct) ? result.velocity_5m_pct : movePct;
+    }
+    const step1Base = Number(recent[0]?.price);
+    const step1Next = Number(recent[1]?.price);
+    const step2Base = Number(recent[1]?.price);
+    const step2Next = Number(recent[2]?.price);
+    if ([step1Base, step1Next, step2Base, step2Next].every(Number.isFinite) && step1Base > 0 && step2Base > 0) {
+      const move1 = ((step1Next - step1Base) / step1Base) * 100;
+      const move2 = ((step2Next - step2Base) / step2Base) * 100;
+      result.acceleration_1m_pct = move2 - move1;
+    }
+  }
+
+  if (snaps.length >= 3 && !Number.isFinite(result.max_volume_share_pct)) {
+    const recentFees = snaps.slice(-3).map((s) => Number(s?.unclaimed_fees_usd)).filter(Number.isFinite);
+    if (recentFees.length >= 2) {
+      const deltas = [];
+      for (let i = 1; i < recentFees.length; i++) deltas.push(Math.max(0, recentFees[i] - recentFees[i - 1]));
+      const total = deltas.reduce((sum, v) => sum + v, 0);
+      if (total > 0) result.max_volume_share_pct = (Math.max(...deltas) / total) * 100;
+    }
+  }
+
+  return result;
+}
+
 function computeFragility(position = {}) {
+  const momentum = deriveMomentumSignals(position);
   let score = 0;
   const reasons = [];
 
@@ -89,28 +142,35 @@ function computeFragility(position = {}) {
     reasons.push("wide bin step");
   }
 
-  const velocity5m = Number(position.velocity_5m_pct);
+  const velocity5m = Number.isFinite(momentum.velocity_5m_pct) ? momentum.velocity_5m_pct : Number(position.velocity_5m_pct);
   if (Number.isFinite(velocity5m)) {
     const absVelocity = Math.abs(velocity5m);
     if (absVelocity >= 12) { score += 12; reasons.push("violent 5m velocity"); }
     else if (absVelocity >= 7) { score += 7; reasons.push("fast 5m velocity"); }
   }
 
-  const accel1m = Number(position.acceleration_1m_pct);
+  const accel1m = Number.isFinite(momentum.acceleration_1m_pct) ? momentum.acceleration_1m_pct : Number(position.acceleration_1m_pct);
   if (Number.isFinite(accel1m)) {
     const absAccel = Math.abs(accel1m);
     if (absAccel >= 6) { score += 10; reasons.push("sharp 1m acceleration"); }
     else if (absAccel >= 3) { score += 5; reasons.push("notable 1m acceleration"); }
   }
 
-  const maxVolumeShare = Number(position.max_volume_share_pct);
+  const maxVolumeShare = Number.isFinite(momentum.max_volume_share_pct) ? momentum.max_volume_share_pct : Number(position.max_volume_share_pct);
   if (Number.isFinite(maxVolumeShare)) {
     if (maxVolumeShare >= 35) { score += 8; reasons.push("candle expansion / crowding"); }
     else if (maxVolumeShare >= 20) { score += 4; reasons.push("volume concentration"); }
   }
 
   const level = score >= 40 ? "ultrafragile" : score >= 20 ? "fast" : "normal";
-  return { score, level, reasons };
+  return {
+    score,
+    level,
+    reasons,
+    velocity_5m_pct: Number.isFinite(momentum.velocity_5m_pct) ? Number(momentum.velocity_5m_pct.toFixed(2)) : null,
+    acceleration_1m_pct: Number.isFinite(momentum.acceleration_1m_pct) ? Number(momentum.acceleration_1m_pct.toFixed(2)) : null,
+    max_volume_share_pct: Number.isFinite(momentum.max_volume_share_pct) ? Number(momentum.max_volume_share_pct.toFixed(2)) : null,
+  };
 }
 
 function applyFragilityToBand(bandConfig = {}, fragility = { score: 0, level: "normal" }) {
@@ -599,7 +659,8 @@ export function resolvePendingTrailingDrop(position_address, currentPnlPct, trai
 
   if (stillNearCrash && stillDroppedEnough) {
     const band = pos.management_band || "B";
-    const reason = `Trailing TP (Band ${band}): peak ${pendingPeak.toFixed(2)}% → current ${currentPnlPct.toFixed(2)}% (drop ${(pendingPeak - currentPnlPct).toFixed(2)}% >= ${trailingDropPct}%)`;
+    const fragility = pos.fragility_level ? ` | fragility ${pos.fragility_level}:${pos.fragility_score ?? "?"}` : "";
+    const reason = `Trailing TP (Band ${band}${fragility}): peak ${pendingPeak.toFixed(2)}% → current ${currentPnlPct.toFixed(2)}% (drop ${(pendingPeak - currentPnlPct).toFixed(2)}% >= ${trailingDropPct}%)`;
     pos.confirmed_trailing_exit_reason = reason;
     pos.confirmed_trailing_exit_until = new Date(Date.now() + 30_000).toISOString();
     save(state);
@@ -650,6 +711,8 @@ export function getStateSummary() {
       deployed_at: p.deployed_at,
       volatility: p.volatility ?? null,
       management_band: p.management_band ?? null,
+      fragility_score: p.fragility_score ?? null,
+      fragility_level: p.fragility_level ?? null,
       out_of_range_since: p.out_of_range_since,
       minutes_out_of_range: minutesOutOfRange(p.position),
       total_fees_claimed_usd: p.total_fees_claimed_usd,
@@ -705,10 +768,13 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
     pos.management_band = managementBand;
     changed = true;
   }
-  if (pos.fragility_score !== fragility.score || pos.fragility_level !== fragility.level) {
+  if (pos.fragility_score !== fragility.score || pos.fragility_level !== fragility.level || pos.velocity_5m_pct !== fragility.velocity_5m_pct || pos.acceleration_1m_pct !== fragility.acceleration_1m_pct || pos.max_volume_share_pct !== fragility.max_volume_share_pct) {
     pos.fragility_score = fragility.score;
     pos.fragility_level = fragility.level;
     pos.fragility_reasons = fragility.reasons;
+    pos.velocity_5m_pct = fragility.velocity_5m_pct;
+    pos.acceleration_1m_pct = fragility.acceleration_1m_pct;
+    pos.max_volume_share_pct = fragility.max_volume_share_pct;
     changed = true;
   }
   pos.management_band_config = bandConfig;
