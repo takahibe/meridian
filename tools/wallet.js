@@ -28,6 +28,7 @@ function getWallet() {
 const JUPITER_PRICE_API = "https://api.jup.ag/price/v3";
 const JUPITER_SWAP_V2_API = "https://api.jup.ag/swap/v2";
 const DEFAULT_JUPITER_API_KEY = "b15d42e9-e0e4-4f90-a424-ae41ceeaa382";
+const SOL_MINT = "So11111111111111111111111111111111111111112";
 
 function getJupiterApiKey() {
   return config.jupiter.apiKey || process.env.JUPITER_API_KEY || DEFAULT_JUPITER_API_KEY;
@@ -182,7 +183,23 @@ export async function getWalletBalances() {
 /**
  * Swap tokens via Jupiter Swap API V2 (order → sign → execute).
  */
-const SOL_MINT = "So11111111111111111111111111111111111111112";
+function amountToUi(amountRaw, decimals) {
+  const rawNum = Number(amountRaw);
+  if (!Number.isFinite(rawNum)) return amountRaw ?? null;
+  const scale = Math.pow(10, Number(decimals) || 0);
+  if (!Number.isFinite(scale) || scale <= 0) return rawNum;
+  return rawNum / scale;
+}
+
+async function getMintDecimals(mint) {
+  if (!mint || mint === SOL_MINT) return 9;
+  try {
+    const mintInfo = await getConnection().getParsedAccountInfo(new PublicKey(mint));
+    return mintInfo.value?.data?.parsed?.info?.decimals ?? 9;
+  } catch {
+    return 9;
+  }
+}
 
 // Normalize any SOL-like address to the correct wrapped SOL mint
 export function normalizeMint(mint) {
@@ -293,13 +310,20 @@ export async function swapToken({
       );
     }
 
+    const inputDecimals = await getMintDecimals(input_mint);
+    const outputDecimals = await getMintDecimals(output_mint);
+
     return {
       success: true,
       tx: result.signature,
       input_mint,
       output_mint,
-      amount_in: result.inputAmountResult,
-      amount_out: result.outputAmountResult,
+      amount_in: amountToUi(result.inputAmountResult, inputDecimals),
+      amount_out: amountToUi(result.outputAmountResult, outputDecimals),
+      amount_in_raw: result.inputAmountResult,
+      amount_out_raw: result.outputAmountResult,
+      input_decimals: inputDecimals,
+      output_decimals: outputDecimals,
       referral_account: referralParams?.referralAccount || null,
       referral_fee_bps_requested: referralParams?.referralFee || 0,
       fee_bps_applied: order.feeBps ?? null,

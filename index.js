@@ -84,8 +84,9 @@ const _peakConfirmTimers = new Map();
 const _trailingDropConfirmTimers = new Map();
 const TRAILING_PEAK_CONFIRM_DELAY_MS = 15_000;
 const TRAILING_PEAK_CONFIRM_TOLERANCE = 0.85;
-const TRAILING_DROP_CONFIRM_DELAY_MS = 15_000;
+const TRAILING_DROP_CONFIRM_DELAY_MS = 5_000;
 const TRAILING_DROP_CONFIRM_TOLERANCE_PCT = 1.0;
+const TRAILING_HARD_EXIT_NEGATIVE_PNL_PCT = -2.0;
 
 /** Strip <think>...</think> reasoning blocks that some models leak into output */
 function stripThink(text) {
@@ -125,10 +126,13 @@ function schedulePeakConfirmation(positionAddress) {
   _peakConfirmTimers.set(positionAddress, timer);
 }
 
-function scheduleTrailingDropConfirmation(positionAddress) {
+function scheduleTrailingDropConfirmation(positionAddress, trailingDropPct = config.management.trailingDropPct, currentPnlPct = null) {
   if (!positionAddress || _trailingDropConfirmTimers.has(positionAddress)) return;
 
-  const timer = setTimeout(async () => {
+  const hardExit = Number.isFinite(currentPnlPct) && Number.isFinite(trailingDropPct) && currentPnlPct <= TRAILING_HARD_EXIT_NEGATIVE_PNL_PCT;
+  const delayMs = hardExit ? 0 : TRAILING_DROP_CONFIRM_DELAY_MS;
+
+  const runCheck = async () => {
     _trailingDropConfirmTimers.delete(positionAddress);
     try {
       const result = await getMyPositions({ force: true, silent: true }).catch(() => null);
@@ -136,7 +140,7 @@ function scheduleTrailingDropConfirmation(positionAddress) {
       const resolved = resolvePendingTrailingDrop(
         positionAddress,
         position?.pnl_pct ?? null,
-        config.management.trailingDropPct,
+        trailingDropPct,
         TRAILING_DROP_CONFIRM_TOLERANCE_PCT,
       );
       if (resolved?.confirmed) {
@@ -146,7 +150,17 @@ function scheduleTrailingDropConfirmation(positionAddress) {
     } catch (error) {
       log("state_warn", `Trailing drop confirmation failed for ${positionAddress}: ${error.message}`);
     }
-  }, TRAILING_DROP_CONFIRM_DELAY_MS);
+  };
+
+  if (delayMs <= 0) {
+    const pending = Promise.resolve().then(runCheck);
+    _trailingDropConfirmTimers.set(positionAddress, pending);
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    runCheck().catch(() => null);
+  }, delayMs);
 
   _trailingDropConfirmTimers.set(positionAddress, timer);
 }
@@ -238,7 +252,7 @@ export async function runManagementCycle({ silent = false } = {}) {
       if (exit) {
         if (exit.action === "TRAILING_TP" && exit.needs_confirmation && shouldUsePnlRecheck()) {
           if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, exit.trailing_drop_pct ?? config.management.trailingDropPct)) {
-            scheduleTrailingDropConfirmation(p.position);
+            scheduleTrailingDropConfirmation(p.position, exit.trailing_drop_pct ?? config.management.trailingDropPct, exit.current_pnl_pct);
           }
           continue;
         }
@@ -919,7 +933,7 @@ Summarize the current portfolio health, total fees earned, and performance of al
         if (exit) {
           if (exit.action === "TRAILING_TP" && exit.needs_confirmation && shouldUsePnlRecheck()) {
             if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, exit.trailing_drop_pct ?? config.management.trailingDropPct)) {
-              scheduleTrailingDropConfirmation(p.position);
+              scheduleTrailingDropConfirmation(p.position, exit.trailing_drop_pct ?? config.management.trailingDropPct, exit.current_pnl_pct);
             }
             continue;
           }

@@ -630,10 +630,12 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
   if (!pnl_pct_suspicious && pos.trailing_active) {
     const dropFromPeak = pos.peak_pnl_pct - currentPnlPct;
     if (dropFromPeak >= trailingDropPct) {
+      const hardExit = currentPnlPct <= -2 || dropFromPeak >= (trailingDropPct * 2.5);
       return {
         action: "TRAILING_TP",
         reason: `Trailing TP (Band ${managementBand}): peak ${pos.peak_pnl_pct.toFixed(2)}% → current ${currentPnlPct.toFixed(2)}% (drop ${dropFromPeak.toFixed(2)}% >= ${trailingDropPct}%)`,
-        needs_confirmation: true,
+        needs_confirmation: !hardExit,
+        hard_exit: hardExit,
         peak_pnl_pct: pos.peak_pnl_pct,
         current_pnl_pct: currentPnlPct,
         drop_from_peak_pct: dropFromPeak,
