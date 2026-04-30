@@ -218,20 +218,6 @@ export async function runManagementCycle({ silent = false } = {}) {
       return mgmtReport;
     }
 
-    // Auto-scale management interval based on average position volatility
-    {
-      const volArr = positions.map((p) => p.volatility).filter((v) => v != null && v > 0);
-      if (volArr.length > 0) {
-        const avgVol = volArr.reduce((s, v) => s + v, 0) / volArr.length;
-        const targetMin = avgVol >= 3.0 ? 5 : avgVol >= 1.5 ? 7 : 10;
-        if (targetMin !== config.schedule.managementIntervalMin) {
-          config.schedule.managementIntervalMin = targetMin;
-          startCronJobs();
-          log("cron", `Management interval auto-scaled to ${targetMin}min (avg volatility: ${avgVol.toFixed(1)})`);
-        }
-      }
-    }
-
     // Snapshot + load pool memory
     const positionData = positions.map((p) => {
       recordPositionSnapshot(p.pool, p);
