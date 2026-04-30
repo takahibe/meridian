@@ -493,14 +493,27 @@ export async function runScreeningCycle({ silent = false } = {}) {
     }
     const minRequired = config.management.deployAmountSol + config.management.gasReserve;
     const isDryRun = process.env.DRY_RUN === "true";
-    if (!isDryRun && preBalance.sol < minRequired) {
-      log("cron", `Screening skipped — insufficient SOL (${preBalance.sol.toFixed(3)} < ${minRequired} needed for deploy + gas)`);
-      screenReport = `Screening skipped — insufficient SOL (${preBalance.sol.toFixed(3)} < ${minRequired} needed for deploy + gas).`;
+    if (!isDryRun && preBalance.error && preBalance.source === "error") {
+      log("cron", `Screening skipped — could not verify SOL balance (${preBalance.error})`);
+      screenReport = `Screening skipped — could not verify SOL balance (${preBalance.error}).`;
       appendDecision({
         type: "skip",
         actor: "SCREENER",
         summary: "Screening skipped",
-        reason: `Insufficient SOL (${preBalance.sol.toFixed(3)} < ${minRequired})`,
+        reason: `Could not verify SOL balance (${preBalance.error})`,
+      });
+      _screeningBusy = false;
+      return screenReport;
+    }
+    if (!isDryRun && preBalance.sol < minRequired) {
+      const sourceNote = preBalance.source === "rpc_fallback" ? " via RPC fallback" : "";
+      log("cron", `Screening skipped — insufficient SOL${sourceNote} (${preBalance.sol.toFixed(3)} < ${minRequired} needed for deploy + gas)`);
+      screenReport = `Screening skipped — insufficient SOL${sourceNote} (${preBalance.sol.toFixed(3)} < ${minRequired} needed for deploy + gas).`;
+      appendDecision({
+        type: "skip",
+        actor: "SCREENER",
+        summary: "Screening skipped",
+        reason: `Insufficient SOL${sourceNote} (${preBalance.sol.toFixed(3)} < ${minRequired})`,
       });
       _screeningBusy = false;
       return screenReport;

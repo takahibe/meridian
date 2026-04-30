@@ -681,10 +681,17 @@ async function runSafetyChecks(name, args) {
         const balance = await getWalletBalances();
         const gasReserve = config.management.gasReserve;
         const minRequired = amountY + gasReserve;
-        if (balance.sol < minRequired) {
+        if (balance.error && balance.source === "error") {
           return {
             pass: false,
-            reason: `Insufficient SOL: have ${balance.sol} SOL, need ${minRequired} SOL (${amountY} deploy + ${gasReserve} gas reserve).`,
+            reason: `Could not verify SOL balance safely: ${balance.error}`,
+          };
+        }
+        if (balance.sol < minRequired) {
+          const sourceNote = balance.source === "rpc_fallback" ? " (RPC fallback)" : "";
+          return {
+            pass: false,
+            reason: `Insufficient SOL${sourceNote}: have ${balance.sol} SOL, need ${minRequired} SOL (${amountY} deploy + ${gasReserve} gas reserve).`,
           };
         }
       }
