@@ -146,6 +146,51 @@ function evaluatePreset(side, preset, payload) {
             reason: "Supertrend bearish confirmation or RSI overbought",
             signal: summary,
           };
+    case "supertrend_bounce":
+      // Entry logic for bid-ask bin strategy:
+      // Primary  : Supertrend 15m bullish (price at/near support = bounce zone)
+      // Secondary: RSI overbought on 5m OR 15m (momentum confirmation)
+      // Bonus    : Supertrend 5m break = extra confidence (not required)
+      if (side === "entry") {
+        const stBreakUp = summary.supertrendBreakUp;
+        const stBullish = isBullish && close != null && summary.supertrendValue != null && close >= summary.supertrendValue;
+        const rsiOversold = rsi != null && rsi <= oversold;
+        const st5mBreak = payload?.latest?.states?.supertrendBreakUp && payload?.interval === "5_MINUTE";
+        // Build layered reasons
+        const layers = [];
+        if (stBreakUp) layers.push("ST 15m break-up");
+        else if (stBullish) layers.push("ST 15m bullish");
+        if (rsiOversold) layers.push(`RSI ${rsi} oversold`);
+        if (st5mBreak) layers.push("ST 5m break (bonus)");
+        const reason = layers.length > 0 ? layers.join(" + ") : "No confirmation yet";
+        return {
+          confirmed: (stBreakUp || stBullish) && rsiOversold,
+          reason,
+          signal: summary,
+        };
+      } else {
+        // Exit flips based on 15m trend:
+        // ST 15m bearish → exit at Bollinger middle band (+ RSI overbought = confirm)
+        // ST 15m bullish → exit at Bollinger upper band (+ RSI overbought = confirm)
+        // ST 15m bearish break = immediate exit regardless
+        const stBearish = isBearish && close != null && summary.supertrendValue != null && close <= summary.supertrendValue;
+        const stBullish = isBullish && close != null && summary.supertrendValue != null && close >= summary.supertrendValue;
+        const bbMiddleTouched = close != null && summary.middleBand != null && close >= summary.middleBand;
+        const bbUpperTouched = close != null && summary.upperBand != null && close >= summary.upperBand;
+        const rsiOverbought = rsi != null && rsi >= overbought;
+        const layers = [];
+        if (summary.supertrendBreakDown) layers.push("ST 15m break-down (exit now)");
+        else if (stBearish) layers.push("ST 15m bearish");
+        else if (stBullish) layers.push("ST 15m bullish");
+        if (bbMiddleTouched) layers.push(`BB mid ${summary.middleBand?.toFixed(4)}`);
+        if (bbUpperTouched) layers.push(`BB upper ${summary.upperBand?.toFixed(4)}`);
+        if (rsiOverbought) layers.push(`RSI ${rsi} overbought`);
+        return {
+          confirmed: summary.supertrendBreakDown || (stBearish && bbMiddleTouched) || (stBullish && bbUpperTouched && rsiOverbought),
+          reason: layers.length > 0 ? layers.join(" | ") : "No exit signal yet",
+          signal: summary,
+        };
+      }
     case "bb_plus_rsi":
       return side === "entry"
         ? {
@@ -297,6 +342,166 @@ export async function confirmIndicatorPreset({
       reason: "Indicator API unavailable; falling back to existing logic",
       intervals: results,
     };
+  }
+
+  // ── Hierarchical combination for supertrend_bounce ──────────────────────────
+  // 15m supertrend bullish = primary entry condition (price at support = bounce zone)
+  // RSI overbought on 5m OR 15m = secondary momentum confirmation
+  // ST 5m break = bonus confidence (not required, just logged)
+  // For exits: BB upper band + RSI overbought on 15m, or ST 15m bearish reversal
+  if (preset === "supertrend_bounce") {
+    const m15 = successful.find((e) => e.interval === "15_MINUTE");
+    const m5 = successful.find((e) => e.interval === "5_MINUTE");
+
+    if (side === "entry") {
+      // Primary: 15m supertrend must be bullish (break or price above line)
+      const m15StBullish = m15 && (m15.signal?.supertrendBreakUp || (m15.signal?.supertrendDirection === "bullish" && m15.signal?.close != null && m15.signal?.supertrendValue != null && m15.signal.close >= m15.signal.supertrendValue));
+      // Secondary: RSI overbought on 5m OR 15m
+      const m15RsiOb = m15 && m15.signal?.rsi != null && m15.signal.rsi >= (config.indicators.rsiOverbought ?? 80);
+      const m5RsiOb = m5 && m5.signal?.rsi != null && m5.signal.rsi >= (config.indicators.rsiOverbought ?? 80);
+      const rsiOverbought = m15RsiOb || m5RsiOb;
+      // Bonus: ST 5m break
+      const st5mBreak = m5?.signal?.supertrendBreakUp;
+
+      if (m15StBullish && rsiOverbought) {
+        const rsiVal = m15RsiOb ? m15.signal.rsi : m5.signal.rsi;
+        return {
+          enabled: true,
+          confirmed: true,
+          skipped: false,
+          preset,
+          side,
+          requireAllIntervals: false,
+          reason: st5mBreak
+            ? `ST 15m bullish + RSI ${rsiVal} overbought + ST 5m break (full confirmation)`
+            : `ST 15m bullish + RSI ${rsiVal} overbought (entry confirmed)`,
+          intervals: results,
+        };
+      }
+      if (m15StBullish && !rsiOverbought) {
+        return {
+          enabled: true,
+          confirmed: false,
+          skipped: false,
+          preset,
+          side,
+          requireAllIntervals: false,
+          reason: `ST 15m bullish (primary) but no RSI overbought on 5m or 15m — waiting for RSI confirmation`,
+          intervals: results,
+        };
+      }
+      return {
+        enabled: true,
+        confirmed: false,
+        skipped: false,
+        preset,
+        side,
+        requireAllIntervals: false,
+        reason: `ST 15m not bullish. ${m15 ? `15m: ${m15.reason}` : "15m: no data"} ${m5 ? `| 5m: ${m5.reason}` : ""}`,
+        intervals: results,
+      };
+    }
+
+    if (side === "exit") {
+      // Exit targets flip based on 15m trend direction:
+      // ST 15m bearish  → exit at Bollinger MIDDLE band (take profit earlier, protect from reversal)
+      // ST 15m bullish → exit at Bollinger UPPER band (let position ride the uptrend)
+      // Supertrend 15m bearish break = immediate exit regardless of BB
+      const stBearishM15 = m15 && (m15.signal?.supertrendBreakDown || (m15.signal?.supertrendDirection === "bearish" && m15.signal?.close != null && m15.signal?.supertrendValue != null && m15.signal.close <= m15.signal.supertrendValue));
+      const stBullishM15 = m15 && (m15.signal?.supertrendBreakUp || (m15.signal?.supertrendDirection === "bullish" && m15.signal?.close != null && m15.signal?.supertrendValue != null && m15.signal.close >= m15.signal.supertrendValue));
+      const bbMiddleM15 = m15 && m15.signal?.close != null && m15.signal?.middleBand != null && m15.signal.close >= m15.signal.middleBand;
+      const bbUpperM15 = m15 && m15.signal?.close != null && m15.signal?.upperBand != null && m15.signal.close >= m15.signal.upperBand;
+      const rsiObM15 = m15 && m15.signal?.rsi != null && m15.signal.rsi >= (config.indicators.rsiOverbought ?? 80);
+
+      // Supertrend 15m bearish break = immediate exit (trend reversal)
+      if (stBearishM15 && m15.signal?.supertrendBreakDown) {
+        return {
+          enabled: true,
+          confirmed: true,
+          skipped: false,
+          preset,
+          side,
+          requireAllIntervals: false,
+          reason: `ST 15m bearish break — immediate exit (trend reversed)`,
+          intervals: results,
+        };
+      }
+
+      if (stBearishM15) {
+        // Bearish: exit at middle band + RSI overbought (confirm momentum peak)
+        if (bbMiddleM15 && rsiObM15) {
+          return {
+            enabled: true,
+            confirmed: true,
+            skipped: false,
+            preset,
+            side,
+            requireAllIntervals: false,
+            reason: `ST 15m bearish + BB middle touched + RSI ${m15.signal.rsi} overbought — exit (take profit)`,
+            intervals: results,
+          };
+        }
+        if (bbMiddleM15) {
+          return {
+            enabled: true,
+            confirmed: true,
+            skipped: false,
+            preset,
+            side,
+            requireAllIntervals: false,
+            reason: `ST 15m bearish + BB middle touched — exit (partial signal, taking profit)`,
+            intervals: results,
+          };
+        }
+        return {
+          enabled: true,
+          confirmed: false,
+          skipped: false,
+          preset,
+          side,
+          requireAllIntervals: false,
+          reason: `ST 15m bearish but BB middle not touched (${m15.signal?.middleBand?.toFixed(4) ?? "n/a"}). Waiting.`,
+          intervals: results,
+        };
+      }
+
+      if (stBullishM15) {
+        // Bullish: exit at upper band + RSI overbought (uptrend exhausted)
+        if (bbUpperM15 && rsiObM15) {
+          return {
+            enabled: true,
+            confirmed: true,
+            skipped: false,
+            preset,
+            side,
+            requireAllIntervals: false,
+            reason: `ST 15m bullish + BB upper touched + RSI ${m15.signal.rsi} overbought — exit (uptrend stretched)`,
+            intervals: results,
+          };
+        }
+        return {
+          enabled: true,
+          confirmed: false,
+          skipped: false,
+          preset,
+          side,
+          requireAllIntervals: false,
+          reason: `ST 15m bullish — holding. BB upper=${m15.signal?.upperBand?.toFixed(4) ?? "n/a"}, RSI=${m15.signal?.rsi ?? "n/a"}`,
+          intervals: results,
+        };
+      }
+
+      return {
+        enabled: true,
+        confirmed: false,
+        skipped: false,
+        preset,
+        side,
+        requireAllIntervals: false,
+        reason: `ST 15m direction unclear. ${m15 ? `RSI=${m15.signal?.rsi ?? "n/a"}, BB mid=${m15.signal?.middleBand?.toFixed(4) ?? "n/a"}, BB upper=${m15.signal?.upperBand?.toFixed(4) ?? "n/a"}` : "15m: no data"}`,
+        intervals: results,
+      };
+    }
   }
 
   const requireAll = !!config.indicators.requireAllIntervals;

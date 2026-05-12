@@ -1,0 +1,15 @@
+{
+  "indicatorFilter": true,
+  "indicatorInterval": "15_MINUTE",
+  "indicatorRules": {
+    "requireBullishSupertrend": true,
+    "rejectAlreadyAtBottom": true,
+    "requireAboveSupertrend": true,
+    "minRsi": 80,
+    "maxRsi": null,
+    "requireBbPosition": null
+  },
+  "_lastAgentTune": "2026-04-22T15:14:14.920Z",
+  "interval": "1h",
+  "maxBundlerRate": 0.5
+}

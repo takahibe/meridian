@@ -1,0 +1,84 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { assignBand } from "../tools/scoring.js";
+
+const cfg = {
+  xNarrativeMinConfidence: "moderate",
+  minPoolTvl: 15000,
+  minPoolOpenPositions: 1,
+};
+
+test("rejects weak X narrative before anything else", () => {
+  const result = assignBand({
+    active_tvl: 50000,
+    open_positions: 5,
+    fragility_level: "normal",
+    discord_active: true,
+  }, {
+    narrative_confidence: "weak",
+    shill_burst_flag: false,
+  }, cfg);
+
+  assert.equal(result.band, "REJECT");
+  assert.equal(result.stage, "x_narrative");
+});
+
+test("rejects shill burst even if narrative score would otherwise pass", () => {
+  const result = assignBand({
+    active_tvl: 50000,
+    open_positions: 5,
+    fragility_level: "normal",
+  }, {
+    narrative_confidence: "strong",
+    shill_burst_flag: true,
+  }, cfg);
+
+  assert.equal(result.band, "REJECT");
+  assert.match(result.reasons.join(" "), /shill burst/i);
+});
+
+test("pool quality veto beats discord escalation", () => {
+  const result = assignBand({
+    active_tvl: 50000,
+    open_positions: 5,
+    fragility_level: "ultrafragile",
+    discord_active: true,
+  }, {
+    narrative_confidence: "strong",
+    shill_burst_flag: false,
+  }, cfg);
+
+  assert.equal(result.band, "REJECT");
+  assert.equal(result.stage, "pool_quality");
+});
+
+test("discord candidates become band A", () => {
+  const result = assignBand({
+    active_tvl: 50000,
+    open_positions: 3,
+    fragility_level: "normal",
+    lpagent_confidence: "moderate",
+    discord_active: true,
+  }, {
+    narrative_confidence: "moderate",
+    shill_burst_flag: false,
+  }, cfg);
+
+  assert.equal(result.band, "A");
+});
+
+test("non-discord candidates become band B after passing hard gates", () => {
+  const result = assignBand({
+    active_tvl: 50000,
+    open_positions: 3,
+    fragility_level: "fast",
+    lpagent_confidence: "moderate",
+    discord_active: false,
+  }, {
+    narrative_confidence: "strong",
+    shill_burst_flag: false,
+  }, cfg);
+
+  assert.equal(result.band, "B");
+  assert.match(result.risks.join(" "), /fragility fast/i);
+});

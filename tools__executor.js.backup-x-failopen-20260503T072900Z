@@ -21,7 +21,7 @@ import { blockDev, unblockDev, listBlockedDevs } from "../dev-blocklist.js";
 import { addSmartWallet, removeSmartWallet, listSmartWallets, checkSmartWalletsOnPool } from "../smart-wallets.js";
 import { getTokenInfo, getTokenHolders, getTokenNarrative } from "./token.js";
 import { getXNarrativeSignal } from "./x-narrative.js";
-import { config, reloadScreeningThresholds, MIN_SAFE_BINS_BELOW } from "../config.js";
+import { config, reloadScreeningThresholds } from "../config.js";
 import { getRecentDecisions } from "../decision-log.js";
 import fs from "fs";
 import path from "path";
@@ -165,8 +165,6 @@ const toolMap = {
       minBinStep: ["screening", "minBinStep"],
       maxBinStep: ["screening", "maxBinStep"],
       timeframe: ["screening", "timeframe"],
-      screeningTimeframe: ["screening", "timeframe"],
-      entryTimeframe: ["screening", "entryTimeframe"],
       category: ["screening", "category"],
       minTokenFeesSol: ["screening", "minTokenFeesSol"],
       useDiscordSignals: ["screening", "useDiscordSignals"],
@@ -183,7 +181,6 @@ const toolMap = {
       athFilterPct:     ["screening", "athFilterPct"],
       screenerFunnelEnabled: ["screening", "screenerFunnelEnabled"],
       xNarrativeMinConfidence: ["screening", "xNarrativeMinConfidence"],
-      xNarrativeFailOpenOnUnavailable: ["screening", "xNarrativeFailOpenOnUnavailable"],
       xApiCacheMinutes: ["screening", "xApiCacheMinutes"],
       xApiTimeoutMs: ["screening", "xApiTimeoutMs"],
       xApiMaxResults: ["screening", "xApiMaxResults"],
@@ -251,8 +248,6 @@ const toolMap = {
       gmgnApiKey: ["gmgn", "apiKey"],
       gmgnBaseUrl: ["gmgn", "baseUrl"],
       gmgnInterval: ["gmgn", "interval"],
-      gmgnPoolDetailTimeframe: ["gmgn", "poolDetailTimeframe"],
-      gmgnEntryTimeframe: ["gmgn", "entryTimeframe"],
       gmgnOrderBy: ["gmgn", "orderBy"],
       gmgnDirection: ["gmgn", "direction"],
       gmgnLimit: ["gmgn", "limit"],
@@ -480,34 +475,27 @@ export async function executeTool(name, args) {
   // ─── Execute ──────────────────────────────
   try {
     if (name === "deploy_position") {
-      let provided = args.signal_snapshot;
-      if (typeof provided === "string") {
-        try {
-          const p = JSON.parse(provided);
-          provided = p && typeof p === "object" && !Array.isArray(p) ? p : null;
-        } catch { provided = null; }
-      } else if (provided != null && (typeof provided !== "object" || Array.isArray(provided))) {
-        provided = null;
-      }
-      const rebuilt = {
-        gmgn_score: args.gmgn_score ?? null,
-        fee_active_tvl_ratio: args.fee_tvl_ratio ?? args.fee_active_tvl_ratio ?? null,
-        volatility: args.volatility ?? null,
-        holders: args.holders ?? null,
-        mcap: args.mcap ?? null,
-        organic_score: args.organic_score ?? null,
-        fragility_level: args.fragility_level ?? null,
-        fragility_score: args.fragility_score ?? null,
-        lpagent_confidence: args.lpagent_confidence ?? null,
-        smart_wallets_present: args.smart_wallets_present ?? null,
-        smart_wallet_count: args.smart_wallet_count ?? null,
-        discord_active: args.discord_active ?? null,
-        narrative_confidence: args.narrative_confidence ?? null,
-        x_narrative_score: args.x_narrative_score ?? null,
-        token_age_hours: args.token_age_hours ?? null,
-        screening_band: args.band ?? null,
+      args = {
+        ...args,
+        signal_snapshot: args.signal_snapshot || {
+          gmgn_score: args.gmgn_score ?? null,
+          fee_active_tvl_ratio: args.fee_tvl_ratio ?? args.fee_active_tvl_ratio ?? null,
+          volatility: args.volatility ?? null,
+          holders: args.holders ?? null,
+          mcap: args.mcap ?? null,
+          organic_score: args.organic_score ?? null,
+          fragility_level: args.fragility_level ?? null,
+          fragility_score: args.fragility_score ?? null,
+          lpagent_confidence: args.lpagent_confidence ?? null,
+          smart_wallets_present: args.smart_wallets_present ?? null,
+          smart_wallet_count: args.smart_wallet_count ?? null,
+          discord_active: args.discord_active ?? null,
+          narrative_confidence: args.narrative_confidence ?? null,
+          x_narrative_score: args.x_narrative_score ?? null,
+          token_age_hours: args.token_age_hours ?? null,
+          screening_band: args.band ?? null,
+        },
       };
-      args = { ...args, signal_snapshot: { ...rebuilt, ...(provided || {}) } };
     }
     const result = await fn(args);
     const duration = Date.now() - startTime;
@@ -525,26 +513,13 @@ export async function executeTool(name, args) {
       if (name === "swap_token" && result.tx) {
         notifySwap({ inputSymbol: args.input_mint?.slice(0, 8), outputSymbol: args.output_mint === "So11111111111111111111111111111111111111112" || args.output_mint === "SOL" ? "SOL" : args.output_mint?.slice(0, 8), amountIn: result.amount_in, amountOut: result.amount_out, tx: result.tx }).catch(() => {});
       } else if (name === "deploy_position") {
-        // Handle signal_snapshot - may be object, string, or missing
-        let snap = args.signal_snapshot || {};
-        if (typeof snap === "string") {
-          try { snap = JSON.parse(snap); } catch { snap = {}; }
-        }
-        if (typeof snap !== "object" || Array.isArray(snap)) snap = {};
-        const funnelReasons = Array.isArray(snap.funnel_reasons) ? snap.funnel_reasons : [];
-        const funnelRisks = Array.isArray(snap.funnel_risks) ? snap.funnel_risks : [];
-        const whyParts = [
+        const why = [
           result.band ? `band ${result.band}` : args.band ? `band ${args.band}` : null,
-          ...funnelReasons.slice(0, 3),
-          funnelRisks.length ? `risks: ${funnelRisks.slice(0, 2).join("; ")}` : null,
-          snap.narrative_confidence != null ? `x=${snap.narrative_confidence}` : args.narrative_confidence != null ? `x=${args.narrative_confidence}` : null,
-          snap.active_tvl != null ? `active TVL $${Math.round(Number(snap.active_tvl))}` : null,
-          snap.open_positions != null ? `open LPs ${snap.open_positions}` : null,
-          snap.fee_active_tvl_ratio != null ? `fee/TVL ${snap.fee_active_tvl_ratio}%` : args.fee_tvl_ratio != null ? `fee/TVL ${args.fee_tvl_ratio}%` : null,
-          snap.mcap != null ? `mcap $${Math.round(Number(snap.mcap))}` : args.mcap != null ? `mcap $${args.mcap}` : null,
-          snap.token_age_hours != null ? `age ${snap.token_age_hours}h` : args.token_age_hours != null ? `age ${args.token_age_hours}h` : null,
-        ];
-        const why = whyParts.filter(Boolean).join(" | ");
+          args.organic_score != null ? `organic ${args.organic_score}` : null,
+          args.fee_tvl_ratio != null ? `fee/TVL ${args.fee_tvl_ratio}%` : null,
+          args.mcap != null ? `mcap $${args.mcap}` : null,
+          args.token_age_hours != null ? `age ${args.token_age_hours}h` : null,
+        ].filter(Boolean).join(" | ");
         notifyDeploy({ pair: result.pool_name || args.pool_name || args.pool_address?.slice(0, 8), amountSol: result.amount_y ?? args.amount_y ?? args.amount_sol ?? 0, position: result.position, tx: result.txs?.[0] ?? result.tx, priceRange: result.price_range, rangeCoverage: result.range_coverage, binStep: result.bin_step, baseFee: result.base_fee, why, band: result.band || args.band || null }).catch(() => {});
       } else if (name === "close_position") {
         // notifyClose is called AFTER the auto-swap block below so we can surface its outcome.
@@ -631,7 +606,6 @@ export async function executeTool(name, args) {
           autoSwapFailed: !!result.auto_swap_failed,
           solReceived: result.sol_received,
           baseLabel: autoSwapLabel,
-          reason: args.reason || null,
         }).catch(() => {});
       } else if (name === "claim_fees" && config.management.autoSwapAfterClaim && result.base_mint) {
         const SOL_MINT = "So11111111111111111111111111111111111111112";
@@ -762,87 +736,6 @@ async function runSafetyChecks(name, args) {
             reason: `Insufficient SOL${sourceNote}: have ${balance.sol} SOL, need ${minRequired} SOL (${amountY} deploy + ${gasReserve} gas reserve).`,
           };
         }
-      }
-
-      // Enforce SOL-only deploys — amount_x > 0 is rejected
-      const deployAmountY = Number(args.amount_y ?? args.amount_sol ?? 0);
-      const deployAmountX = Number(args.amount_x ?? 0);
-      if (Number.isFinite(deployAmountX) && deployAmountX > 0) {
-        return {
-          pass: false,
-          reason: "This agent only supports single-side SOL deploys. Use amount_y/amount_sol and keep amount_x=0.",
-        };
-      }
-
-      // Enforce minimum total bins
-      const requestedBinsBelow = Number(args.bins_below ?? config.strategy.defaultBinsBelow ?? config.strategy.minBinsBelow);
-      const requestedBinsAbove = Number(args.bins_above ?? 0);
-      const minBinsBelow = Math.max(MIN_SAFE_BINS_BELOW, Number(config.strategy.minBinsBelow ?? MIN_SAFE_BINS_BELOW));
-      const requestedTotalBins = requestedBinsBelow + requestedBinsAbove;
-      let snapshotVolatility = null;
-      if (typeof args.signal_snapshot === "object" && args.signal_snapshot !== null) {
-        snapshotVolatility = args.signal_snapshot.volatility;
-      } else if (typeof args.signal_snapshot === "string") {
-        try { snapshotVolatility = JSON.parse(args.signal_snapshot)?.volatility; } catch { /* ignore malformed snapshot */ }
-      }
-      const rawVolatility = args.volatility ?? snapshotVolatility;
-      const requestedVolatility = rawVolatility == null ? null : Number(rawVolatility);
-
-      if (rawVolatility != null && (!Number.isFinite(requestedVolatility) || requestedVolatility < 0)) {
-        return {
-          pass: false,
-          reason: `volatility ${rawVolatility} is invalid. Refusing deploy because the volatility feed is unusable.`,
-        };
-      }
-      const maxVolatilityHard = Number(config.screening.maxVolatilityHard);
-      if (
-        rawVolatility != null &&
-        Number.isFinite(requestedVolatility) &&
-        Number.isFinite(maxVolatilityHard) &&
-        requestedVolatility > maxVolatilityHard
-      ) {
-        return {
-          pass: false,
-          reason: `volatility ${requestedVolatility} is above hard maximum ${maxVolatilityHard}. Refusing deploy; entry is too unstable for DLMM LP.`,
-        };
-      }
-      if (
-        args.downside_pct == null &&
-        args.upside_pct == null &&
-        (
-          !Number.isFinite(requestedBinsBelow) ||
-          !Number.isFinite(requestedBinsAbove) ||
-          !Number.isInteger(requestedBinsBelow) ||
-          !Number.isInteger(requestedBinsAbove) ||
-          requestedBinsBelow < 0 ||
-          requestedBinsAbove < 0 ||
-          requestedTotalBins < minBinsBelow
-        )
-      ) {
-        return {
-          pass: false,
-          reason: `deploy range ${requestedTotalBins} total bins is below minimum ${minBinsBelow}. Refusing 1-bin/tiny-range deploy.`,
-        };
-      }
-      if (
-        deployAmountY > 0 && deployAmountX <= 0 &&
-        args.downside_pct == null &&
-        (!Number.isFinite(requestedBinsBelow) || !Number.isInteger(requestedBinsBelow) || requestedBinsBelow < minBinsBelow)
-      ) {
-        return {
-          pass: false,
-          reason: `bins_below ${args.bins_below ?? "missing"} is below minimum ${minBinsBelow}. Refusing 1-bin/tiny-range deploy.`,
-        };
-      }
-      if (
-        deployAmountY > 0 && deployAmountX <= 0 &&
-        args.upside_pct == null &&
-        (!Number.isFinite(requestedBinsAbove) || !Number.isInteger(requestedBinsAbove) || requestedBinsAbove !== 0)
-      ) {
-        return {
-          pass: false,
-          reason: "Single-side SOL deploy must use bins_above=0.",
-        };
       }
 
       return { pass: true };

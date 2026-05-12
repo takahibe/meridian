@@ -397,8 +397,8 @@ export function stopPolling() {
 }
 
 // ─── Notification helpers ────────────────────────────────────────
-export async function notifyDeploy({ pair, amountSol, position, tx, priceRange, rangeCoverage, binStep, baseFee, why }) {
-  if (hasActiveLiveMessage()) return;
+export async function notifyDeploy({ pair, amountSol, position, tx, priceRange, rangeCoverage, binStep, baseFee, why, band = null }) {
+  // NEVER block deploy/close/swap notifications — these are critical events
   const priceStr = priceRange
     ? `Price range: ${priceRange.min < 0.0001 ? priceRange.min.toExponential(3) : priceRange.min.toFixed(6)} – ${priceRange.max < 0.0001 ? priceRange.max.toExponential(3) : priceRange.max.toFixed(6)}\n`
     : "";
@@ -409,20 +409,37 @@ export async function notifyDeploy({ pair, amountSol, position, tx, priceRange, 
     ? `Bin step: ${binStep ?? "?"}  |  Base fee: ${baseFee != null ? baseFee + "%" : "?"}\n`
     : "";
   const whyStr = why ? `Why: ${why}\n` : "";
+
+  // Build visual range bar
+  let visual = "";
+  if (priceRange?.min != null && priceRange?.max != null && rangeCoverage?.active_price != null) {
+    visual = renderDeployVisual({
+      pair,
+      amountSol,
+      lowerPrice: priceRange.min,
+      upperPrice: priceRange.max,
+      activePrice: rangeCoverage.active_price,
+      binStep,
+      baseFee,
+      band,
+    });
+  }
+
   await sendHTML(
     `✅ <b>Deployed</b> ${pair}\n` +
-    `Amount: ${amountSol} SOL\n` +
+    `Amount: ${amountSol} SOL${band ? ` | Band ${band}` : ""}\n` +
     priceStr +
     coverageStr +
     poolStr +
     whyStr +
     `Position: <code>${position?.slice(0, 8)}...</code>\n` +
-    `Tx: <code>${tx?.slice(0, 16)}...</code>`
+    `Tx: <code>${tx?.slice(0, 16)}...</code>` +
+    (visual ? `\n\n${visual}` : "")
   );
 }
 
-export async function notifyClose({ pair, pnlUsd, pnlPct, autoSwapped, autoSwapFailed, solReceived, baseLabel }) {
-  if (hasActiveLiveMessage()) return;
+export async function notifyClose({ pair, pnlUsd, pnlPct, autoSwapped, autoSwapFailed, solReceived, baseLabel, reason }) {
+  // NEVER block deploy/close/swap notifications — these are critical events
   const sign = pnlUsd >= 0 ? "+" : "";
   let swapLine = "";
   if (autoSwapped) {
@@ -431,15 +448,16 @@ export async function notifyClose({ pair, pnlUsd, pnlPct, autoSwapped, autoSwapF
   } else if (autoSwapFailed) {
     swapLine = `\n⚠️ Auto-swap FAILED${baseLabel ? ` for ${baseLabel}` : ""} — manual swap_token needed`;
   }
+  const reasonLine = reason ? `\n↪ ${reason}` : "";
   await sendHTML(
     `🔒 <b>Closed</b> ${pair}\n` +
-    `PnL: ${sign}$${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)` +
+    `PnL: ${sign}$${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)${reasonLine}` +
     swapLine
   );
 }
 
 export async function notifySwap({ inputSymbol, outputSymbol, amountIn, amountOut, tx }) {
-  if (hasActiveLiveMessage()) return;
+  // NEVER block deploy/close/swap notifications — these are critical events
   await sendHTML(
     `🔄 <b>Swapped</b> ${inputSymbol} → ${outputSymbol}\n` +
     `In: ${amountIn ?? "?"} | Out: ${amountOut ?? "?"}\n` +
@@ -455,6 +473,18 @@ export async function notifyOutOfRange({ pair, minutesOOR }) {
   );
 }
 
+export async function notifyXApiDegraded({ total = 0, unknown = 0, reasons = [], examples = [] } = {}) {
+  if (hasActiveLiveMessage()) return;
+  const reasonLine = reasons.length ? `Reasons: ${reasons.join(", ")}\n` : "";
+  const sampleLine = examples.length ? `Examples: ${examples.join(", ")}` : "";
+  await sendHTML(
+    `⚠️ <b>X API degraded during screening</b>\n` +
+    `Unknown narrative results: ${unknown}/${total}\n` +
+    reasonLine +
+    sampleLine
+  );
+}
+
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -462,4 +492,37 @@ function sleep(ms) {
 function fmtPct(value) {
   const n = Number(value);
   return Number.isFinite(n) ? `${n.toFixed(2)}%` : "?";
+}
+
+// ─── Visual range illustration helpers ────────────────────────────────────
+
+function makeBar(fraction, width = 20) {
+  const filled = Math.max(0, Math.min(width, Math.round(fraction * width)));
+  const empty = width - filled;
+  return "█".repeat(filled) + "░".repeat(empty);
+}
+
+function priceBar(lowerPrice, upperPrice, activePrice, width = 18) {
+  // Returns a visual bar with ↑ marker at active price position
+  const range = upperPrice - lowerPrice;
+  if (range <= 0 || !Number.isFinite(range)) {
+    return { bar: makeBar(0.5, width), pct: 50 };
+  }
+  const frac = Math.max(0, Math.min(1, (activePrice - lowerPrice) / range));
+  const filled = Math.max(0, Math.min(width, Math.round(frac * width)));
+  const bar = "█".repeat(filled) + "↑" + "░".repeat(Math.max(0, width - filled - 1));
+  return { bar, pct: Math.round(frac * 100) };
+}
+
+export function renderDeployVisual({ pair, amountSol, lowerPrice, upperPrice, activePrice, binStep, baseFee, band }) {
+  const { bar, pct } = priceBar(lowerPrice, upperPrice, activePrice, 22);
+  const lowerStr = lowerPrice < 0.0001 ? lowerPrice.toExponential(2) : lowerPrice.toFixed(6);
+  const upperStr = upperPrice < 0.0001 ? upperPrice.toExponential(2) : upperPrice.toFixed(6);
+  const bandEmoji = band === "A" ? "🟢" : band === "B" ? "🟡" : band === "C" ? "🔴" : "⚪";
+  return (
+    `🚩 <b>${pair}</b>  ${bandEmoji} Band ${band || "?"}\n` +
+    `💰 ${amountSol} SOL  |  ⚙️ Bin ${binStep ?? "?"}  |  📉 Base ${baseFee != null ? baseFee + "%" : "?"}\n\n` +
+    `${lowerStr} ${bar} ${upperStr}\n` +
+    `↑ Active price sits at ~${pct}% of range`
+  );
 }

@@ -86,8 +86,6 @@ let _screeningBusy = false;  // prevents overlapping screening cycles
 let _screeningLastStartedAt = 0; // epoch ms — prevents management from spamming screening
 let _screeningLastFinishedAt = 0; // epoch ms — tracks the last completed screening cycle
 let _pollTriggeredAt = 0; // epoch ms — cooldown for poller-triggered management
-let _lastMgmtCycleId = ''; // current cycle ID being processed
-let _lastMgmtCompleted = 0; // epoch ms — last completed cycle for dedupe
 let _lastXApiAlertAt = 0; // epoch ms — debounce X API degradation alerts
 const _peakConfirmTimers = new Map();
 const _trailingDropConfirmTimers = new Map();
@@ -154,8 +152,8 @@ function scheduleTrailingDropConfirmation(positionAddress, trailingDropPct = con
         TRAILING_DROP_CONFIRM_TOLERANCE_PCT,
       );
       if (resolved?.confirmed) {
-        log("state", `[Trailing recheck] Confirmed trailing exit for ${positionAddress} — ${_managementBusy ? "already running" : "triggering management"}`);
-        if (!_managementBusy) runManagementCycle({ silent: true }).catch((e) => log("cron_error", `Trailing recheck management failed: ${e.message}`));
+        log("state", `[Trailing recheck] Confirmed trailing exit for ${positionAddress} — triggering management`);
+        runManagementCycle({ silent: true }).catch((e) => log("cron_error", `Trailing recheck management failed: ${e.message}`));
       }
     } catch (error) {
       log("state_warn", `Trailing drop confirmation failed for ${positionAddress}: ${error.message}`);
@@ -175,21 +173,16 @@ function scheduleTrailingDropConfirmation(positionAddress, trailingDropPct = con
   _trailingDropConfirmTimers.set(positionAddress, timer);
 }
 
-let _briefingBusy = false;
 async function runBriefing() {
-  if (_briefingBusy) { log("cron", "Briefing already in progress — skipping"); return; }
-  _briefingBusy = true;
   log("cron", "Starting morning briefing");
   try {
-    setLastBriefingDate(); // set BEFORE async send to prevent watchdog race
     const briefing = await generateBriefing();
     if (telegramEnabled()) {
       await sendHTML(briefing);
     }
+    setLastBriefingDate();
   } catch (error) {
     log("cron_error", `Morning briefing failed: ${error.message}`);
-  } finally {
-    _briefingBusy = false;
   }
 }
 
@@ -219,36 +212,20 @@ async function maybeRunMissedBriefing() {
 }
 
 function stopCronJobs() {
-  for (const task of _cronTasks) {
-    if (typeof task.stop === 'function') task.stop();
-    else clearInterval(task);
-  }
+  for (const task of _cronTasks) task.stop();
   if (_cronTasks._pnlPollInterval) clearInterval(_cronTasks._pnlPollInterval);
   _cronTasks = [];
 }
 
 export async function runManagementCycle({ silent = false } = {}) {
-  // Dedupe: if cycle running recently or completed recently, skip
-  const thisCycleId = `mgmt-${Date.now()}`;
-  const now = Date.now();
-  if (_lastMgmtCycleId && (now - parseInt(_lastMgmtCycleId.split('-')[1])) < 30000) {
-    log("cron", `[Dedupe] Skipping — cycle already running (ID: ${_lastMgmtCycleId})`);
-    return null;
-  }
-  if (_lastMgmtCompleted && (now - _lastMgmtCompleted) < 60000) {
-    log("cron", `[Dedupe] Skipping — recent completed at ${_lastMgmtCompleted}`);
-    return null;
-  }
-  _lastMgmtCycleId = thisCycleId;
-  
   if (_managementBusy) return null;
   _managementBusy = true;
   timers.managementLastRun = Date.now();
-  log("cron", `Starting management cycle [${thisCycleId}]`);
+  log("cron", "Starting management cycle");
   let mgmtReport = null;
   let positions = [];
   let liveMessage = null;
-  const screeningCooldownMs = Math.max(5, Number(config.schedule.screeningIntervalMin ?? 60)) * 60 * 1000;
+  const screeningCooldownMs = 5 * 60 * 1000;
 
   // Attempt to sweep any tokens that failed auto-swap on previous closes.
   sweepPendingTokens().catch((e) => log("sweep_error", e.message));
@@ -377,9 +354,7 @@ export async function runManagementCycle({ silent = false } = {}) {
           });
           if (result?.position) {
             markSpotAdded(p.pool);
-            const posMsg = `➕ SPOT-ADD\n\n${p.pair} • ${spotAmount} SOL added\nPool: ${p.pool.slice(0, 8)}...${p.pool.slice(-4)}\n\n📍 ${triggerReason}`;
             log("cron", `Spot-add SUCCESS for ${p.pair} — ${spotAmount} SOL spot position opened (${result.position.slice(0, 8)})`);
-            sendMessage(posMsg).catch(() => {});
           } else {
             log("cron", `Spot-add FAILED for ${p.pair}: ${result?.error || "no position returned"}`);
           }
@@ -393,111 +368,19 @@ export async function runManagementCycle({ silent = false } = {}) {
     const totalValue = positionData.reduce((s, p) => s + (p.total_value_usd ?? 0), 0);
     const totalUnclaimed = positionData.reduce((s, p) => s + (p.unclaimed_fees_usd ?? 0), 0);
 
-    // ── ASCII Bin Map renderer ──────────────────────────────────────
-function formatBinMap(lowerBin, upperBin, activeBin) {
-  if (lowerBin == null || upperBin == null || activeBin == null) return null;
-  const MAP_WIDTH = 27; // chars wide for the bar
-  const range = upperBin - lowerBin + 1;
-  // Show 15-35 bins wide, centred on the position
-  const window = Math.min(Math.max(range, 15), 35);
-  const midBin = Math.floor((lowerBin + upperBin) / 2);
-  const half = Math.floor(window / 2);
-  const windowStart = midBin - half;
-  const windowEnd = midBin + half;
-
-  // Build bar: ░ outside position, ▓ = in position
-  let bar = "";
-  for (let i = 0; i < window; i++) {
-    const binId = windowStart + i;
-    bar += (binId >= lowerBin && binId <= upperBin) ? "▓" : "░";
-  }
-
-  // Active bin marker — only show if within window
-  let marker = "";
-  if (activeBin >= windowStart && activeBin <= windowEnd) {
-    const idx = Math.round((activeBin - windowStart) / (windowEnd - windowStart) * (window - 1));
-    marker = " ".repeat(idx) + "◆";
-  }
-
-  const pctInRange = activeBin >= lowerBin && activeBin <= upperBin;
-  const inRangeTag = pctInRange ? "🟢" : "🔴";
-  return `${inRangeTag} bin[${lowerBin}‒${upperBin}] active=${activeBin}\n\`\`\`${bar}\`\`\`${marker ? "\n" + marker : ""}`;
-}
-
-// ── Build per-position report lines ────────────────────────────
-// New format (user's preferred style):
-// 🔄 Management Cycle
-// 📊 Spirit-SOL | bid_ask
-//    💰 ◎0.250 | PnL: 🟢 +0.3% (+◎0.000) | Range: 🟢 [████████████████] 99% (bin -602/-670–-601) | 📥 ◎0.000 | 📈 3.46%/24h
-//    🟢 IN | ⏱️ 28m 
-// 📊 Staccana-SOL | bid_ask
-//    💰 ◎0.249 | PnL: 🟢 +5.5% (+◎0.012) | Range: 🟢 [████████████░░░░] 74% (bin -583/-609–-574) | 📥 ◎0.013 | 📈 708.84%/24h
-//    🟢 IN | ⏱️ 10m 
-// 📦 2 positions | 💵 ◎0.499 | 📥 fees: ◎0.013
-// 📊 Avg PnL: +2.89% | 🔔 Action: none | ✅ Stay: 2
-
-function computeRangePct(lowerBin, upperBin, activeBin) {
-  if (lowerBin == null || upperBin == null || activeBin == null) return 0;
-  const total = upperBin - lowerBin + 1;
-  if (total <= 0) return 0;
-  if (activeBin < lowerBin) return 0;
-  if (activeBin > upperBin) return 100;
-  return Math.round(((activeBin - lowerBin + 1) / total) * 100);
-}
-
-function formatBinBar(lowerBin, upperBin, activeBin) {
-  if (lowerBin == null || upperBin == null || activeBin == null) return "░░░░░░░░░░░░░░░░░";
-  const range = upperBin - lowerBin + 1;
-  if (range <= 0) return "░░░░░░░░░░░░░░░░░░";
-  const BARSIZE = 16;
-  
-  // Position of active bin within the range (0 to range-1)
-  let posInRange = 0;
-  if (activeBin < lowerBin) posInRange = 0;
-  else if (activeBin > upperBin) posInRange = range - 1;
-  else posInRange = activeBin - lowerBin;
-  
-  // How many bars to fill based on position
-  let filled = Math.round((posInRange / range) * BARSIZE);
-  if (filled < 0) filled = 0;
-  if (filled > BARSIZE) filled = BARSIZE;
-  
-  return "▓".repeat(filled) + "░".repeat(BARSIZE - filled);
-}
-
-const reportLines = positionData.map((p) => {
+    const reportLines = positionData.map((p) => {
       const act = actionMap.get(p.position);
-      const inRange = p.in_range;
-      const inRangeTag = inRange ? "🟢" : "🔴";
-      const statusLine = inRange ? `🟢 IN` : `🔴 OOR`;
-      
-      // Compute range %
-      const rangePct = computeRangePct(p.lower_bin, p.upper_bin, p.active_bin);
-      const binBar = formatBinBar(p.lower_bin, p.upper_bin, p.active_bin);
-      
-      // PnL formatting
-      const pnlVal = p.pnl_pct ?? 0;
-      const pnlTag = pnlVal >= 0 ? "🟢" : "🔴";
-      const pnlStr = `${pnlTag} ${pnlVal >= 0 ? "+" : ""}${pnlVal.toFixed(2)}%`;
-      
-      // Value and fees
-      const val = config.management.solMode ? `◎${(p.total_value_usd ?? 0).toFixed(3)}` : `$${(p.total_value_usd ?? 0).toFixed(2)}`;
-      const fees = config.management.solMode ? `◎${(p.unclaimed_fees_usd ?? 0).toFixed(3)}` : `$${(p.unclaimed_fees_usd ?? 0).toFixed(4)}`;
-      
-      // Yield/24h
-      const yield24h = p.fee_per_tvl_24h ?? 0;
-      
-      // Strategy from position or default
-      const strategy = p.strategy || "bid_ask";
-      
-      // Age in minutes
-      const age = p.age_minutes ?? 0;
-      
-      // Build the position card
-      const line = `📊 ${p.pair} | ${strategy}\n` +
-        `   💰 ${val} | PnL: ${pnlStr} (+${fees}) | Range: ${inRangeTag} [${binBar}] ${rangePct}% (bin ${p.lower_bin}/${p.active_bin}–${p.upper_bin}) | 📥 ${fees} | 📈 ${yield24h.toFixed(2)}%/24h\n` +
-        `   ${statusLine} | ⏱️ ${age}m`;
-      
+      const inRange = p.in_range ? "🟢 IN" : `🔴 OOR ${p.minutes_out_of_range ?? 0}m`;
+      const val = config.management.solMode ? `◎${p.total_value_usd ?? "?"}` : `$${p.total_value_usd ?? "?"}`;
+      const unclaimed = config.management.solMode ? `◎${p.unclaimed_fees_usd ?? "?"}` : `$${p.unclaimed_fees_usd ?? "?"}`;
+      const statusLabel = act.action === "INSTRUCTION" ? "HOLD (instruction)" : act.action;
+      const tracked = getTrackedPosition(p.position);
+      const fragilityTag = tracked?.fragility_level ? ` | Frag: ${tracked.fragility_level}${tracked?.fragility_score != null ? `(${tracked.fragility_score})` : ""}` : "";
+      let line = `**${p.pair}** | Age: ${p.age_minutes ?? "?"}m | Val: ${val} | Unclaimed: ${unclaimed} | PnL: ${p.pnl_pct ?? "?"}% | Yield: ${p.fee_per_tvl_24h ?? "?"}%${fragilityTag} | ${inRange} | ${statusLabel}`;
+      if (p.instruction) line += `\nNote: "${p.instruction}"`;
+      if (act.action === "CLOSE" && act.rule === "exit") line += `\n⚡ Trailing TP: ${act.reason}`;
+      if (act.action === "CLOSE" && act.rule && act.rule !== "exit") line += `\nRule ${act.rule}: ${act.reason}`;
+      if (act.action === "CLAIM") line += `\n→ Claiming fees`;
       return line;
     });
 
@@ -507,20 +390,8 @@ const reportLines = positionData.map((p) => {
       : "no action";
 
     const cur = config.management.solMode ? "◎" : "$";
-    // Compute avg PnL
-    const avgPnl = positions.length > 0
-      ? positionData.reduce((s, p) => s + (p.pnl_pct ?? 0), 0) / positions.length
-      : 0;
-    const avgPnlTag = avgPnl >= 0 ? "🟢" : "🔴";
-    const totalVal = config.management.solMode ? `◎${totalValue.toFixed(3)}` : `$${totalValue.toFixed(2)}`;
-    const totalFees = config.management.solMode ? `◎${totalUnclaimed.toFixed(3)}` : `$${totalUnclaimed.toFixed(4)}`;
-    const stayCount = [...actionMap.values()].filter(a => a.action === "STAY").length;
-    const actionLabel = actionSummary === "no action" ? "none" : actionSummary;
-    
-    // Build final report - header added separately by liveMessage when present
     mgmtReport = reportLines.join("\n\n") +
-      `\n\n📦 ${positions.length} positions | 💵 ${totalVal} | 📥 fees: ${totalFees}\n` +
-      `📊 Avg PnL: ${avgPnlTag} ${avgPnl >= 0 ? "+" : ""}${avgPnl.toFixed(2)}% | 🔔 Action: ${actionLabel} | ✅ Stay: ${stayCount}`;
+      `\n\nSummary: 💼 ${positions.length} positions | ${cur}${totalValue.toFixed(4)} | fees: ${cur}${totalUnclaimed.toFixed(4)} | ${actionSummary}`;
 
     const deterministicActions = [];
     const instructionPositions = [];
@@ -617,11 +488,6 @@ After executing, write a brief one-line result per position.
     mgmtReport = `Management cycle failed: ${error.message}`;
   } finally {
     _managementBusy = false;
-    // Clear dedupe tracking
-    if (_lastMgmtCycleId === thisCycleId) {
-      _lastMgmtCycleId = '';
-      _lastMgmtCompleted = Date.now();
-    }
     if (!silent && telegramEnabled()) {
       if (mgmtReport) {
         if (liveMessage) await liveMessage.finalize(stripThink(mgmtReport)).catch(() => {});
@@ -769,19 +635,6 @@ export async function runScreeningCycle({ silent = false } = {}) {
       pool.recommended_bins_below = recommendedBinsBelow;
       setRecommendedBins(pool.pool, { bins: recommendedBinsBelow, fragility, volatility: pool.volatility });
 
-      const vol = pool.volatility;
-      const maxVolHard = Number(config.screening.maxVolatilityHard ?? 3.5);
-      if (vol == null && config.screening.rejectNullVolatility) {
-        log("screening", `Vol gate: dropped ${pool.name} — volatility=null (no poolDetail.volatility)`);
-        filteredOut.push({ name: pool.name, reason: "volatility=null" });
-        return false;
-      }
-      if (vol != null && vol > maxVolHard) {
-        log("screening", `Vol gate: dropped ${pool.name} — volatility ${vol} > max ${maxVolHard} (too volatile for LP)`);
-        filteredOut.push({ name: pool.name, reason: `volatility ${vol} > ${maxVolHard} (too volatile)` });
-        return false;
-      }
-
       const launchpad = ti?.launchpad ?? null;
       if (launchpad && config.screening.allowedLaunchpads?.length > 0 && !config.screening.allowedLaunchpads.includes(launchpad)) {
         log("screening", `Skipping ${pool.name} — launchpad ${launchpad} not in allow-list`);
@@ -809,24 +662,6 @@ export async function runScreeningCycle({ silent = false } = {}) {
       }
       const feePct = Number(pool.fee_pct ?? 0);
       const feeTvl = Number(pool.fee_active_tvl_ratio ?? pool.fee_tvl_ratio ?? 0);
-
-      // ── Standalone hard gate: minimum token age ──
-      const ageHours = Number(pool.token_age_hours);
-      const minAge = Number(config.screening.minTokenAgeHours ?? 0);
-      if (Number.isFinite(ageHours) && Number.isFinite(minAge) && minAge > 0 && ageHours < minAge) {
-        log("screening", `Age gate: dropped ${pool.name} — age ${ageHours}h < min ${minAge}h`);
-        filteredOut.push({ name: pool.name, reason: `age ${ageHours}h < minimum ${minAge}h` });
-        return false;
-      }
-
-      // ── Standalone hard gate: minimum fee/TVL ratio ──
-      const minFeeTvl = Number(config.screening.minFeeActiveTvlRatio ?? 0);
-      if (Number.isFinite(feeTvl) && Number.isFinite(minFeeTvl) && minFeeTvl > 0 && feeTvl < minFeeTvl) {
-        log("screening", `Fee/TVL gate: dropped ${pool.name} — fee/TVL ${feeTvl}% < min ${minFeeTvl}%`);
-        filteredOut.push({ name: pool.name, reason: `fee/TVL ${feeTvl}% < minimum ${minFeeTvl}%` });
-        return false;
-      }
-
       const dynamicFeePct = Math.max(0, feePct - Number(pool.base_fee ?? feePct));
       const deadFeeEngine = feeTvl <= 0.02 && dynamicFeePct <= 0.02;
       if (fragility.score >= 30 && deadFeeEngine && feePct <= 0.4) {
@@ -884,14 +719,10 @@ export async function runScreeningCycle({ silent = false } = {}) {
         .map((entry) => `- ${entry.name}: ${entry.reason}`)
         .join("\n");
       const funnelBlock = buildGmgnFunnelReport(gmgnStageCounts, gmgnAllFiltered, { fromStage: 2 });
-      const postFunnelExamples = filteredOut.slice(0, 5)
-        .map((entry) => `- ${entry.name}: ${entry.reason}`)
-        .join("\n");
-      const postFunnelBlock = postFunnelExamples ? `Post-funnel local filters:\n${postFunnelExamples}` : "";
       const thresholds = `Thresholds: tvl>$${config.screening.minTvl} | vol>$${config.screening.minVolume} | organic>${config.screening.minOrganic}% | holders>${config.screening.minHolders} | fee/tvl>${config.screening.minFeeActiveTvlRatio}%`;
       const xHealthBlock = formatXNarrativeHealthBlock(xApiHealth);
       screenReport = funnelBlock
-        ? `No candidates available.\n\n${funnelBlock}${postFunnelBlock ? `\n\n${postFunnelBlock}` : ""}${xHealthBlock ? `\n\n${xHealthBlock}` : ""}${vetoExamples ? `\n\nFragility vetoes:\n${vetoExamples}` : ""}`
+        ? `No candidates available.\n\n${funnelBlock}${xHealthBlock ? `\n\n${xHealthBlock}` : ""}${vetoExamples ? `\n\nFragility vetoes:\n${vetoExamples}` : ""}`
         : combinedExamples
           ? `No candidates available.\nFiltered examples:\n${combinedExamples}${xHealthBlock ? `\n\n${xHealthBlock}` : ""}${vetoExamples ? `\n\nFragility vetoes:\n${vetoExamples}` : ""}`
           : `No candidates available (all filtered).\n${thresholds}${xHealthBlock ? `\n\n${xHealthBlock}` : ""}${vetoExamples ? `\n\nFragility vetoes:\n${vetoExamples}` : ""}`;
@@ -903,36 +734,6 @@ export async function runScreeningCycle({ silent = false } = {}) {
         rejected: combined.slice(0, 5).map((entry) => `${entry.name}: ${entry.reason}`),
       });
       return screenReport;
-    }
-
-    if (passing.length === 1) {
-      const skipReason = getLoneCandidateSkipReason(passing[0]);
-      if (skipReason) {
-        const candidateName = passing[0].pool?.name || "unknown";
-        screenReport = [
-          "⛔ NO DEPLOY",
-          "",
-          "Cycle finished with no valid entry.",
-          "",
-          "BEST LOOKING CANDIDATE",
-          candidateName,
-          "",
-          "WHY SKIPPED",
-          `Only one candidate survived filtering, but it was not worth deploying: ${skipReason}.`,
-          "",
-          "REJECTED",
-          `- ${candidateName}: ${skipReason}`,
-        ].join("\n");
-        appendDecision({
-          type: "no_deploy",
-          actor: "SCREENER",
-          summary: "Single candidate skipped",
-          reason: skipReason,
-          pool: passing[0].pool?.pool,
-          pool_name: candidateName,
-        });
-        return screenReport;
-      }
     }
 
     if (passing.length <= 1 && gmgnStageCounts) {
@@ -992,7 +793,6 @@ export async function runScreeningCycle({ silent = false } = {}) {
     const funnelCounts = {
       gmgn: candidates.length,
       x_pass: 0,
-      x_fail_open: 0,
       pool_pass: 0,
       discord_active: 0,
       band_A: 0,
@@ -1010,22 +810,17 @@ export async function runScreeningCycle({ silent = false } = {}) {
         ? assignBand({
             active_tvl: pool.active_tvl,
             open_positions: pool.open_positions,
-            fee_active_tvl_ratio: pool.fee_active_tvl_ratio ?? pool.fee_tvl_ratio,
-            volatility: pool.volatility,
-            token_age_hours: pool.token_age_hours,
             fragility_level: pool.entry_fragility_level,
             lpagent_confidence: pool.lpagent_confidence,
             discord_active: Boolean(pool.discord_signal),
           }, {
             narrative_confidence: x?.narrative_confidence,
             shill_burst_flag: x?.shill_burst_flag,
-            x_unavailable_reason: x?.reason,
             lpagent_confidence: pool.lpagent_confidence,
           }, config.screening)
         : { band: pool.discord_signal ? "A" : "B", reasons: ["funnel disabled"], risks: [] };
 
       if (x?.narrative_confidence && !["unknown", "absent", "weak"].includes(String(x.narrative_confidence).toLowerCase())) funnelCounts.x_pass++;
-      if ((banding.reasons || []).some((reason) => /fail-open enabled/i.test(String(reason)))) funnelCounts.x_fail_open++;
       if (["A", "B"].includes(banding.band)) funnelCounts.pool_pass++;
       if (pool.discord_signal) funnelCounts.discord_active++;
       if (banding.band === "A") funnelCounts.band_A++;
@@ -1039,7 +834,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
     });
 
     const visiblePassing = scoredPassing.filter(({ banding }) => ["A", "B"].includes(banding.band));
-    log("screening", `funnel: gmgn=${funnelCounts.gmgn} x_pass=${funnelCounts.x_pass} x_fail_open=${funnelCounts.x_fail_open} pool_pass=${funnelCounts.pool_pass} discord_active=${funnelCounts.discord_active} → band_A=${funnelCounts.band_A} band_B=${funnelCounts.band_B} reject=${funnelCounts.reject}`);
+    log("screening", `funnel: gmgn=${funnelCounts.gmgn} x_pass=${funnelCounts.x_pass} pool_pass=${funnelCounts.pool_pass} discord_active=${funnelCounts.discord_active} → band_A=${funnelCounts.band_A} band_B=${funnelCounts.band_B} reject=${funnelCounts.reject}`);
 
     if (visiblePassing.length === 0) {
       const funnelSummary = buildConfidenceFunnelReport(funnelCounts, scoredPassing, xApiHealth);
@@ -1142,9 +937,6 @@ export async function runScreeningCycle({ silent = false } = {}) {
         lpagent_confidence: lpSignal?.confidence ?? null,
         token_age_hours: pool.token_age_hours ?? null,
         screening_band: banding.band,
-        funnel_reasons: banding.reasons || [],
-        funnel_risks: banding.risks || [],
-        x_unavailable_reason: x?.reason ?? null,
       });
 
       let block;
@@ -1169,7 +961,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
         block = [
           `POOL: ${pool.name} (${pool.pool})`,
           `  deploy_args: band=${banding.band}, amount_y<=${deployAmount}, bins_above=0`,
-`  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.active_tvl}, volatility=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}, fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"})${pool.entry_fragility_reasons?.length ? ` [${pool.entry_fragility_reasons.slice(0,2).join(";")}]` : ""}`,
+          `  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.active_tvl}, volatility=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}, fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"}), recommended_bins_below=${pool.recommended_bins_below ?? "?"}`,
           `  audit: top10=${top10Pct}%, bots=${botPct}%, fees=${feesSol}SOL${launchpad ? `, launchpad=${launchpad}` : ""}`,
           funnelLine,
           gmgnPriceLine,
@@ -1191,8 +983,6 @@ export async function runScreeningCycle({ silent = false } = {}) {
 
     const weightsSummary = config.darwin?.enabled ? getWeightsSummary() : null;
 
-    let deployAttempted = false;
-    let deploySucceeded = false;
     const { content } = await agentLoop(`
 SCREENING CYCLE
 ${strategyBlock}
@@ -1205,26 +995,14 @@ PRE-LOADED CANDIDATES (${visiblePassing.length} pools):
 ${candidateBlocks.join("\n\n")}
 
 STEPS:
-1. Decide if any candidate is actually worth deploying. One surviving candidate is not automatically good enough.
-2. Pick the best candidate based on funnel band first, then narrative quality, smart wallets, pool metrics, and LPAgent shortlist signal when present.
-3. Call deploy_position (active_bin is pre-fetched above — no need to call get_active_bin).
+1. Pick the best candidate based on funnel band first, then narrative quality, smart wallets, pool metrics, and LPAgent shortlist signal when present.
+2. Call deploy_position (active_bin is pre-fetched above — no need to call get_active_bin).
    strategy = ${config.strategy.strategy} (always use this, never change it).
    pass the candidate's band exactly (band = A or B).
    bins_below: omit (or use the candidate's recommended_bins_below). The runtime caps width based on volatility AND fragility — high-vol fragile pools must be tighter, not wider. You may pass a SMALLER value to tighten further; larger values are clamped down.
    bins_above = 0. Single-side SOL only: set amount_y, keep amount_x = 0.
    do NOT pass amount_y larger than ${deployAmount}.
-   IMPORTANT — pass signal_snapshot so the deploy notification explains the reasoning:
-   signal_snapshot: {
-     band: "<A or B>",
-     funnel_reasons: ["<reason1>", "<reason2>"],
-     funnel_risks: ["<risk1>", "<risk2>"],
-     fragility_score: <number>,
-     fragility_level: "<normal/fast/ultrafragile>",
-     token_age_hours: <number>,
-     volatility: <number>,
-     organic_score: <number>
-   }
-4. Report in this exact format (no tables, no extra sections):
+3. Report in this exact format (no tables, no extra sections):
    🚀 DEPLOYED
 
    <pool name>
@@ -1263,7 +1041,7 @@ STEPS:
 
    WHY THIS WON
    <2-4 concise sentences on why this pool won, key risks, and why it still beat the alternatives>
-5. If no pool qualifies, report in this exact format instead:
+4. If no pool qualifies, report in this exact format instead:
    ⛔ NO DEPLOY
 
    Cycle finished with no valid entry.
@@ -1282,17 +1060,8 @@ IMPORTANT:
 - Treat LPAgent shortlist signal as a confidence modifier, not a blind override. Penalize stale LP cohorts or weak fee capture, reward deep/healthy cohorts.
 - Keep the whole report compact and highly scannable for Telegram.
       `, config.llm.maxSteps, [], "SCREENER", config.llm.screeningModel, 2048, {
-        onToolStart: async ({ name }) => {
-          if (name === "deploy_position") deployAttempted = true;
-          await liveMessage?.toolStart(name);
-        },
-        onToolFinish: async ({ name, result, success }) => {
-          if (name === "deploy_position") {
-            deployAttempted = true;
-            deploySucceeded = Boolean(success && result?.success !== false && !result?.error && !result?.blocked);
-          }
-          await liveMessage?.toolFinish(name, result, success);
-        },
+        onToolStart: async ({ name }) => { await liveMessage?.toolStart(name); },
+        onToolFinish: async ({ name, result, success }) => { await liveMessage?.toolFinish(name, result, success); },
       });
     const funnelAppend = buildGmgnFunnelReport(gmgnStageCounts, gmgnAllFiltered, { fromStage: 2 });
     screenReport = funnelAppend ? `${content}\n\n─────────────\n${funnelAppend}` : content;
@@ -1301,13 +1070,6 @@ IMPORTANT:
         type: "no_deploy",
         actor: "SCREENER",
         summary: "LLM chose no deploy",
-        reason: stripThink(content).slice(0, 500),
-      });
-    } else if (!deploySucceeded) {
-      appendDecision({
-        type: "no_deploy",
-        actor: "SCREENER",
-        summary: deployAttempted ? "Deploy attempt did not succeed" : "No successful deploy in screening cycle",
         reason: stripThink(content).slice(0, 500),
       });
     }
@@ -1330,29 +1092,13 @@ IMPORTANT:
 export function startCronJobs() {
   stopCronJobs(); // stop any running tasks before (re)starting
 
-  // Use setInterval for reliable timing (cron can fire multiple times per interval)
-  const mgmtMs = Math.max(1, config.schedule.managementIntervalMin) * 60 * 1000;
-  const screenMs = Math.max(1, config.schedule.screeningIntervalMin) * 60 * 1000;
-  let _lastMgmtStart = 0;
-  let _lastScreenStart = 0;
-
-  const mgmtTask = setInterval(async () => {
-    const now = Date.now();
-    log("cron", `[setInterval] Triggered management cycle`);
+  const mgmtTask = cron.schedule(`*/${Math.max(1, config.schedule.managementIntervalMin)} * * * *`, async () => {
     if (_managementBusy) return;
-    if (now - _lastMgmtStart < mgmtMs * 0.8) return; // 80% debounce
-    _lastMgmtStart = now;
-    timers.managementLastRun = now;
+    timers.managementLastRun = Date.now();
     await runManagementCycle();
-  }, mgmtMs);
+  });
 
-  const screenTask = setInterval(() => {
-    const now = Date.now();
-    if (_screeningBusy) return;
-    if (now - _lastScreenStart < screenMs * 0.8) return; // 80% debounce
-    _lastScreenStart = now;
-    runScreeningCycle();
-  }, screenMs);
+  const screenTask = cron.schedule(`*/${Math.max(1, config.schedule.screeningIntervalMin)} * * * *`, runScreeningCycle);
 
   const healthTask = cron.schedule(`0 * * * *`, async () => {
     if (_managementBusy) return;
@@ -1416,12 +1162,12 @@ Summarize the current portfolio health, total fees earned, and performance of al
           }
           const cooldownMs = config.schedule.managementIntervalMin * 60 * 1000;
           const sinceLastTrigger = Date.now() - _pollTriggeredAt;
-          if (_managementBusy || sinceLastTrigger < cooldownMs) {
-            log("state", `[PnL poll] Exit alert: ${p.pair} — ${exit.reason} — ${_managementBusy ? "already running" : "cooldown (${Math.round((cooldownMs - sinceLastTrigger) / 1000)}s left)"}`);
-          } else {
+          if (sinceLastTrigger >= cooldownMs) {
             _pollTriggeredAt = Date.now();
             log("state", `[PnL poll] Exit alert: ${p.pair} — ${exit.reason} — triggering management`);
-            if (!_managementBusy) runManagementCycle({ silent: true }).catch((e) => log("cron_error", `Poll-triggered management failed: ${e.message}`));
+            runManagementCycle({ silent: true }).catch((e) => log("cron_error", `Poll-triggered management failed: ${e.message}`));
+          } else {
+            log("state", `[PnL poll] Exit alert: ${p.pair} — ${exit.reason} — cooldown (${Math.round((cooldownMs - sinceLastTrigger) / 1000)}s left)`);
           }
           break;
         }
@@ -1442,12 +1188,12 @@ Summarize the current portfolio health, total fees earned, and performance of al
           }
           const cooldownMs = config.schedule.managementIntervalMin * 60 * 1000;
           const sinceLastTrigger = Date.now() - _pollTriggeredAt;
-          if (_managementBusy || sinceLastTrigger < cooldownMs) {
-            log("state", `[PnL poll] Deterministic close rule: ${p.pair} — Rule ${closeRule.rule}: ${closeRule.reason} — ${_managementBusy ? "already running" : "cooldown (${Math.round((cooldownMs - sinceLastTrigger) / 1000)}s left)"}`);
-          } else {
+          if (sinceLastTrigger >= cooldownMs) {
             _pollTriggeredAt = Date.now();
             log("state", `[PnL poll] Deterministic close rule: ${p.pair} — Rule ${closeRule.rule}: ${closeRule.reason} — triggering management`);
-            if (!_managementBusy) runManagementCycle({ silent: true }).catch((e) => log("cron_error", `Poll-triggered management failed: ${e.message}`));
+            runManagementCycle({ silent: true }).catch((e) => log("cron_error", `Poll-triggered management failed: ${e.message}`));
+          } else {
+            log("state", `[PnL poll] Deterministic close rule: ${p.pair} — Rule ${closeRule.rule}: ${closeRule.reason} — cooldown (${Math.round((cooldownMs - sinceLastTrigger) / 1000)}s left)`);
           }
           break;
         }
@@ -1652,7 +1398,7 @@ function getDeterministicCloseRule(position, managementConfig) {
 
 function buildConfidenceFunnelReport(counts = {}, candidates = [], xApiHealth = null) {
   const lines = [
-    `confidence funnel: gmgn=${counts.gmgn ?? 0} | x_pass=${counts.x_pass ?? 0} | x_fail_open=${counts.x_fail_open ?? 0} | pool_pass=${counts.pool_pass ?? 0} | discord=${counts.discord_active ?? 0} | band_A=${counts.band_A ?? 0} | band_B=${counts.band_B ?? 0} | reject=${counts.reject ?? 0}`,
+    `confidence funnel: gmgn=${counts.gmgn ?? 0} | x_pass=${counts.x_pass ?? 0} | pool_pass=${counts.pool_pass ?? 0} | discord=${counts.discord_active ?? 0} | band_A=${counts.band_A ?? 0} | band_B=${counts.band_B ?? 0} | reject=${counts.reject ?? 0}`,
   ];
   const xHealthLine = formatXNarrativeHealthBlock(xApiHealth);
   if (xHealthLine) lines.push(xHealthLine);
@@ -1711,28 +1457,14 @@ function buildGmgnFunnelReport(stageCounts, allFiltered = [], { fromStage = 1 } 
   const funnel = `GMGN funnel: ranked=${sc.ranked ?? "?"} → S1=${sc.s1 ?? "?"} → S2=${sc.s2 ?? "?"} → S3=${sc.s3 ?? "?"} → S4=${sc.s4 ?? "?"} → final=${sc.s5 ?? "?"}`;
   const byStage = {};
   for (const f of allFiltered) {
-    const numericStage = Number(f.stage);
-    const hasNumericStage = Number.isFinite(numericStage);
-    if (hasNumericStage && numericStage < fromStage) continue;
-
-    // GMGN stages have numeric stage IDs. Local Meridian filters added after the
-    // GMGN funnel (cooldowns, ATH, Meteora fee hard gate, blacklists, etc.) often
-    // have no stage field. Label them explicitly instead of rendering "sundefined".
-    const key = hasNumericStage ? `s${numericStage}` : "local";
+    if (f.stage < fromStage) continue;
+    const key = `s${f.stage}`;
     if (!byStage[key]) byStage[key] = [];
     byStage[key].push(`${f.name}: ${f.reason}`);
   }
-  const stageLabels = {
-    s2: "S2 info",
-    s3: "S3 pool",
-    s4: "S4 indicators",
-    s5: "S5 pick",
-    local: "Local filters",
-  };
-  const stageOrder = ["s2", "s3", "s4", "s5", "local"];
-  const details = stageOrder
-    .filter((key) => byStage[key]?.length)
-    .map((key) => `${stageLabels[key] || key}:\n${byStage[key].map(r => `  • ${r}`).join("\n")}`)
+  const stageLabels = { s2: "S2 info", s3: "S3 pool", s4: "S4 indicators", s5: "S5 pick" };
+  const details = Object.entries(byStage)
+    .map(([key, items]) => `${stageLabels[key] || key}:\n${items.map(r => `  • ${r}`).join("\n")}`)
     .join("\n");
   return details ? `${funnel}\n\n${details}` : funnel;
 }
@@ -1814,33 +1546,9 @@ function computeCandidateFragility(pool = {}, ti = null) {
   return { score, level, reasons };
 }
 
-function getLoneCandidateSkipReason({ pool, sw, n, ti } = {}) {
-  if (!pool) return "missing candidate data";
-  const smartWalletCount = Math.max(sw?.in_pool?.length ?? 0, Number(pool.gmgn_smart_wallets ?? 0) || 0);
-  const tokenInfo = ti || {};
-  const hasNarrative = !!n?.narrative;
-  const globalFeesSol = Number(tokenInfo.global_fees_sol ?? pool.gmgn_total_fee_sol);
-  const top10Pct = Number(tokenInfo.audit?.top_holders_pct ?? pool.gmgn_token_info_top10_pct ?? pool.gmgn_top10_holder_pct);
-  const botPct = Number(tokenInfo.audit?.bot_holders_pct ?? pool.gmgn_bot_degen_pct);
-  if (pool.is_wash) return "wash trading was flagged";
-  if (pool.is_rugpull && smartWalletCount === 0) return "rugpull risk was flagged and no smart wallets offset it";
-  if (pool.is_pvp && smartWalletCount === 0) return "PVP symbol conflict and no smart-wallet confirmation";
-  if (Number.isFinite(globalFeesSol) && globalFeesSol < config.screening.minTokenFeesSol) {
-    return `token fees ${globalFeesSol} SOL below minimum ${config.screening.minTokenFeesSol} SOL`;
-  }
-  if (Number.isFinite(top10Pct) && top10Pct > config.screening.maxTop10Pct) {
-    return `top10 concentration ${top10Pct}% above maximum ${config.screening.maxTop10Pct}%`;
-  }
-  if (Number.isFinite(botPct) && botPct > config.screening.maxBotHoldersPct) {
-    return `bot holders ${botPct}% above maximum ${config.screening.maxBotHoldersPct}%`;
-  }
-  if (!hasNarrative && smartWalletCount === 0) return "only candidate has no narrative and no smart-wallet confirmation";
-  return null;
-}
-
-// ═════════════════════════════════════
+// ═══════════════════════════════════════════
 //  INTERACTIVE REPL
-// ═════════════════════════════════════
+// ═══════════════════════════════════════════
 const isTTY = process.stdin.isTTY;
 let cronStarted = false;
 let busy = false;

@@ -1,0 +1,95 @@
+const CONFIDENCE_ORDER = {
+  unknown: 0,
+  absent: 1,
+  weak: 2,
+  moderate: 3,
+  strong: 4,
+};
+
+export function compareConfidence(actual, minimum) {
+  return (CONFIDENCE_ORDER[String(actual || "unknown").toLowerCase()] ?? 0)
+    - (CONFIDENCE_ORDER[String(minimum || "moderate").toLowerCase()] ?? 0);
+}
+
+export function assignBand(candidate = {}, signals = {}, cfg = {}) {
+  const reasons = [];
+  const risks = [];
+  const narrativeConfidence = String(signals.narrative_confidence || candidate.narrative_confidence || "unknown").toLowerCase();
+  const minNarrative = String(cfg.xNarrativeMinConfidence || "moderate").toLowerCase();
+  const shillBurst = Boolean(signals.shill_burst_flag);
+  const activeTvl = Number(candidate.active_tvl);
+  const minPoolTvl = Number(cfg.minPoolTvl ?? 15000);
+  const openPositions = Number(candidate.open_positions);
+  const minPoolOpenPositions = Number(cfg.minPoolOpenPositions ?? 1);
+  const fragilityLevel = String(candidate.fragility_level || candidate.entry_fragility_level || "normal").toLowerCase();
+  const lpagentConfidence = String(candidate.lpagent_confidence || signals.lpagent_confidence || "").toLowerCase();
+  const discordActive = Boolean(candidate.discord_active ?? candidate.discord_signal);
+
+  if (compareConfidence(narrativeConfidence, minNarrative) < 0) {
+    return {
+      band: "REJECT",
+      stage: "x_narrative",
+      reasons: [`x narrative ${narrativeConfidence} < ${minNarrative}`],
+      risks: narrativeConfidence === "unknown" ? ["x narrative unavailable"] : [],
+    };
+  }
+  reasons.push(`x narrative ${narrativeConfidence}`);
+
+  if (shillBurst) {
+    return {
+      band: "REJECT",
+      stage: "x_narrative",
+      reasons: [...reasons, "x shill burst detected"],
+      risks: ["coordinated low-quality posting"],
+    };
+  }
+
+  if (Number.isFinite(activeTvl) && activeTvl < minPoolTvl) {
+    return {
+      band: "REJECT",
+      stage: "pool_quality",
+      reasons: [...reasons, `active_tvl ${Math.round(activeTvl)} < ${Math.round(minPoolTvl)}`],
+      risks,
+    };
+  }
+  reasons.push(`active_tvl ${Math.round(activeTvl || 0)} cleared`);
+
+  if (!Number.isFinite(openPositions) || openPositions < minPoolOpenPositions) {
+    return {
+      band: "REJECT",
+      stage: "pool_quality",
+      reasons: [...reasons, `open_positions ${Number.isFinite(openPositions) ? openPositions : 0} < ${minPoolOpenPositions}`],
+      risks,
+    };
+  }
+  reasons.push(`open_positions ${openPositions} cleared`);
+
+  if (fragilityLevel === "ultrafragile") {
+    return {
+      band: "REJECT",
+      stage: "pool_quality",
+      reasons: [...reasons, "fragility ultrafragile"],
+      risks: [...risks, "pool fragility hard veto"],
+    };
+  }
+  if (fragilityLevel === "fast") risks.push("fragility fast");
+  else reasons.push(`fragility ${fragilityLevel}`);
+
+  if (lpagentConfidence === "avoid") {
+    return {
+      band: "REJECT",
+      stage: "pool_quality",
+      reasons: [...reasons, "lpagent confidence avoid"],
+      risks: [...risks, "LP cohort quality weak"],
+    };
+  }
+  if (lpagentConfidence) reasons.push(`lpagent ${lpagentConfidence}`);
+
+  if (discordActive) {
+    reasons.push("discord escalation active");
+    return { band: "A", stage: "discord", reasons, risks };
+  }
+
+  reasons.push("discord absent → band B");
+  return { band: "B", stage: "discord", reasons, risks };
+}

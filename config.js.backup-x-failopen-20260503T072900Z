@@ -19,8 +19,6 @@ function readJsonIfExists(filePath) {
 const u = readJsonIfExists(USER_CONFIG_PATH);
 const gmgnUserConfig = readJsonIfExists(GMGN_CONFIG_PATH);
 
-export const MIN_SAFE_BINS_BELOW = 35;
-
 // Apply wallet/RPC from user-config if not already in env
 if (u.rpcUrl)    process.env.RPC_URL            ||= u.rpcUrl;
 if (u.walletKey) process.env.WALLET_PRIVATE_KEY ||= u.walletKey;
@@ -55,19 +53,6 @@ function gmgnArray(key, legacyKey, fallback) {
   return fallback;
 }
 
-function toChartInterval(value, fallback = "5_MINUTE") {
-  const raw = String(value || "").trim();
-  const normalized = raw.toLowerCase();
-  if (["1m", "1_minute", "1minute"].includes(normalized)) return "1_MINUTE";
-  if (["5m", "5_minute", "5minute"].includes(normalized)) return "5_MINUTE";
-  if (["15m", "15_minute", "15minute"].includes(normalized)) return "15_MINUTE";
-  if (["1h", "1_hour", "1hour"].includes(normalized)) return "1H";
-  return raw || fallback;
-}
-
-const screeningTimeframe = u.screeningTimeframe ?? u.timeframe ?? "1h";
-const entryTimeframe = u.entryTimeframe ?? u.entrySignalTimeframe ?? "5m";
-
 export const config = {
   // ─── Risk Limits ─────────────────────────
   risk: {
@@ -90,8 +75,7 @@ export const config = {
     maxMcap:           u.maxMcap           ?? 10_000_000,
     minBinStep:        u.minBinStep        ?? 80,
     maxBinStep:        u.maxBinStep        ?? 125,
-    timeframe:         screeningTimeframe,
-    entryTimeframe,
+    timeframe:         u.timeframe         ?? "5m",
     category:          u.category          ?? "trending",
     minTokenFeesSol:   u.minTokenFeesSol   ?? 30,  // global fees paid (priority+jito tips). below = bundled/scam
     useDiscordSignals: u.useDiscordSignals ?? true,
@@ -107,12 +91,8 @@ export const config = {
     maxTokenAgeHours:   u.maxTokenAgeHours   ?? 240, // null = no maximum
     athFilterPct:       u.athFilterPct       ?? -10, // e.g. -20 = only deploy if price is >= 20% below ATH
     maxVolatility:      u.maxVolatility      ?? 5.0,  // evolved by lessons system
-    minVolatility:    u.minVolatility    ?? 1.0,   // hard floor — below this, fees are too thin
-    maxVolatilityHard: u.maxVolatilityHard ?? 3.5,   // hard ceiling — distinct from soft maxVolatility
-    rejectNullVolatility: u.rejectNullVolatility ?? true,  // block GMGN candidates lacking poolDetail.volatility
     screenerFunnelEnabled: u.screenerFunnelEnabled ?? true,
-    xNarrativeMinConfidence: u.xNarrativeMinConfidence ?? "moderate",
-    xNarrativeFailOpenOnUnavailable: u.xNarrativeFailOpenOnUnavailable ?? true,
+    xNarrativeMinConfidence: u.xNarrativeMinConfidence ?? "",
     xApiCacheMinutes: u.xApiCacheMinutes ?? 5,
     xApiTimeoutMs: u.xApiTimeoutMs ?? 4000,
     xApiMaxResults: u.xApiMaxResults ?? 10,
@@ -124,16 +104,13 @@ export const config = {
   gmgn: {
     apiKey: nonEmptyString(gmgnUserConfig.apiKey, u.gmgnApiKey, process.env.GMGN_API_KEY),
     baseUrl: nonEmptyString(gmgnUserConfig.baseUrl, u.gmgnBaseUrl, "https://openapi.gmgn.ai"),
-    interval: gmgnUserConfig.interval ?? u.gmgnInterval ?? screeningTimeframe,
-    poolDetailTimeframe: gmgnUserConfig.poolDetailTimeframe ?? u.gmgnPoolDetailTimeframe ?? screeningTimeframe,
-    entryTimeframe: gmgnUserConfig.entryTimeframe ?? u.gmgnEntryTimeframe ?? entryTimeframe,
+    interval: gmgnValue("interval", "gmgnInterval", "5m"),
     orderBy: gmgnValue("orderBy", "gmgnOrderBy", "default"),
     direction: gmgnValue("direction", "gmgnDirection", "desc"),
     limit: gmgnValue("limit", "gmgnLimit", 100),
     enrichLimit: gmgnValue("enrichLimit", "gmgnEnrichLimit", 20),
     requestDelayMs: gmgnValue("requestDelayMs", "gmgnRequestDelayMs", 800),
     maxRetries: gmgnValue("maxRetries", "gmgnMaxRetries", 2),
-    banCooldownMinutes: gmgnValue("banCooldownMinutes", "gmgnBanCooldownMinutes", 240),
     holdersLimit: gmgnValue("holdersLimit", "gmgnHoldersLimit", 100),
     klineResolution: gmgnValue("klineResolution", "gmgnKlineResolution", "5m"),
     klineLookbackMinutes: gmgnValue("klineLookbackMinutes", "gmgnKlineLookbackMinutes", 60),
@@ -144,7 +121,7 @@ export const config = {
     minTvl: gmgnValue("minTvl", "gmgnMinTvl", u.minTvl ?? 10_000),
     minVolume: gmgnValue("minVolume", "gmgnMinVolume", 1000),
     minHolders: gmgnValue("minHolders", "gmgnMinHolders", u.minHolders ?? 500),
-    minTokenAgeHours: gmgnValue("minTokenAgeHours", "gmgnMinTokenAgeHours", u.minTokenAgeHours ?? 2),
+    minTokenAgeHours: gmgnValue("minTokenAgeHours", "gmgnMinTokenAgeHours", 2),
     maxTokenAgeHours: gmgnValue("maxTokenAgeHours", "gmgnMaxTokenAgeHours", 24 * 7),
     minSmartDegenCount: gmgnValue("minSmartDegenCount", "gmgnMinSmartDegenCount", 1),
     requireKol: gmgnValue("requireKol", "gmgnRequireKol", true),
@@ -165,7 +142,7 @@ export const config = {
     preferredKolNames: gmgnArray("preferredKolNames", "gmgnPreferredKolNames", []),
     dumpKolNames: gmgnArray("dumpKolNames", "gmgnDumpKolNames", []),
     indicatorFilter: gmgnValue("indicatorFilter", "gmgnIndicatorFilter", true),
-    indicatorInterval: gmgnUserConfig.indicatorInterval ?? u.gmgnIndicatorInterval ?? toChartInterval(entryTimeframe),
+    indicatorInterval: gmgnValue("indicatorInterval", "gmgnIndicatorInterval", "15_MINUTE"),
     indicatorRules: (() => {
       const r = gmgnUserConfig.indicatorRules || {};
       return {
@@ -257,10 +234,9 @@ export const config = {
 
   // ─── Strategy Mapping ───────────────────
   strategy: {
-    strategy:       u.strategy       ?? "bid_ask",
-    minBinsBelow:   u.minBinsBelow   ?? 35,
-    maxBinsBelow:   u.maxBinsBelow   ?? 69,
-    defaultBinsBelow: u.defaultBinsBelow ?? 35,
+    strategy:     u.strategy     ?? "bid_ask",
+    minBinsBelow: u.minBinsBelow ?? 35,
+    maxBinsBelow: u.maxBinsBelow ?? 69,
   },
 
   // ─── Scheduling ─────────────────────────
@@ -339,10 +315,7 @@ export const config = {
 };
 
 if (config.screening.screenerFunnelEnabled && !process.env.X_BEARER_TOKEN) {
-  const xMode = config.screening.xNarrativeFailOpenOnUnavailable !== false
-    ? "fail-open is enabled; X will be marked unavailable and later pool-quality gates still apply"
-    : "fail-open is disabled; X narrative gating may reject candidates";
-  console.warn(`[config] screenerFunnelEnabled=true but X_BEARER_TOKEN is unset — ${xMode}.`);
+  console.warn("[config] screenerFunnelEnabled=true but X_BEARER_TOKEN is unset — X narrative gating will return 'unknown' and funnel candidates will be rejected.");
 }
 
 /**
@@ -393,20 +366,14 @@ export function reloadScreeningThresholds() {
     if (fresh.minVolume      != null) s.minVolume      = fresh.minVolume;
     if (fresh.minBinStep     != null) s.minBinStep     = fresh.minBinStep;
     if (fresh.maxBinStep     != null) s.maxBinStep     = fresh.maxBinStep;
-    if (fresh.screeningTimeframe != null) s.timeframe = fresh.screeningTimeframe;
-    else if (fresh.timeframe != null) s.timeframe = fresh.timeframe;
-    if (fresh.entryTimeframe != null) s.entryTimeframe = fresh.entryTimeframe;
+    if (fresh.timeframe         != null) s.timeframe         = fresh.timeframe;
     if (fresh.category          != null) s.category          = fresh.category;
     if (fresh.minTokenAgeHours  !== undefined) s.minTokenAgeHours = fresh.minTokenAgeHours;
     if (fresh.maxTokenAgeHours  !== undefined) s.maxTokenAgeHours = fresh.maxTokenAgeHours;
     if (fresh.athFilterPct      !== undefined) s.athFilterPct     = fresh.athFilterPct;
     if (fresh.maxVolatility     != null) s.maxVolatility     = fresh.maxVolatility;
-    if (fresh.minVolatility    != null) s.minVolatility    = fresh.minVolatility;
-    if (fresh.maxVolatilityHard!= null) s.maxVolatilityHard= fresh.maxVolatilityHard;
-    if (fresh.rejectNullVolatility !== undefined) s.rejectNullVolatility = fresh.rejectNullVolatility;
     if (fresh.screenerFunnelEnabled !== undefined) s.screenerFunnelEnabled = fresh.screenerFunnelEnabled;
     if (fresh.xNarrativeMinConfidence != null) s.xNarrativeMinConfidence = fresh.xNarrativeMinConfidence;
-    if (fresh.xNarrativeFailOpenOnUnavailable !== undefined) s.xNarrativeFailOpenOnUnavailable = fresh.xNarrativeFailOpenOnUnavailable;
     if (fresh.xApiCacheMinutes != null) s.xApiCacheMinutes = fresh.xApiCacheMinutes;
     if (fresh.xApiTimeoutMs != null) s.xApiTimeoutMs = fresh.xApiTimeoutMs;
     if (fresh.xApiMaxResults != null) s.xApiMaxResults = fresh.xApiMaxResults;

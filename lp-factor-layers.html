@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meteora DLMM LP Factor Stack — Meridian Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #020617;
+    color: #e2e8f0;
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .header h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 8px;
+  }
+  .header .subtitle {
+    font-size: 14px;
+    color: #64748b;
+  }
+  .header .badge {
+    display: inline-block;
+    background: rgba(34, 211, 238, 0.1);
+    color: #22d3ee;
+    border: 1px solid rgba(34, 211, 238, 0.3);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 12px;
+  }
+
+  .layer-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: relative;
+  }
+  .layer-stack::before {
+    content: '';
+    position: absolute;
+    left: 24px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, #22d3ee 0%, #34d399 40%, #fbbf24 70%, #fb7185 100%);
+    opacity: 0.3;
+  }
+
+  .layer {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid;
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-left: 48px;
+    position: relative;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+  }
+  .layer:hover {
+    transform: translateX(4px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  .layer::before {
+    content: '';
+    position: absolute;
+    left: -32px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 3px solid;
+    background: #020617;
+  }
+
+  .layer-number {
+    position: absolute;
+    left: -52px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    width: 28px;
+    text-align: center;
+  }
+
+  .layer-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .layer-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+  .layer-title {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .layer-subtitle {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 2px;
+  }
+
+  .factor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .factor-card {
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: 8px;
+    padding: 14px 16px;
+    border-left: 3px solid;
+  }
+  .factor-name {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .factor-desc {
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+  .factor-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    margin-top: 6px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  .tag {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .tag-critical { background: rgba(251, 113, 133, 0.15); color: #fb7185; }
+  .tag-high { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+  .tag-medium { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+  .tag-insight { background: rgba(34, 211, 238, 0.15); color: #22d3ee; }
+
+  .meridian-note {
+    background: rgba(34, 211, 238, 0.05);
+    border: 1px dashed rgba(34, 211, 238, 0.2);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 12px;
+    font-size: 11px;
+    color: #22d3ee;
+    line-height: 1.6;
+  }
+  .meridian-note strong {
+    color: #67e8f9;
+  }
+
+  /* Layer colors */
+  .layer-1 { border-color: rgba(34, 211, 238, 0.3); }
+  .layer-1::before { border-color: #22d3ee; }
+  .layer-1 .layer-icon { background: rgba(34, 211, 238, 0.1); }
+  .layer-1 .layer-title { color: #22d3ee; }
+  .layer-1 .layer-number { color: #22d3ee; }
+  .layer-1 .factor-card { border-left-color: #22d3ee; }
+
+  .layer-2 { border-color: rgba(52, 211, 153, 0.3); }
+  .layer-2::before { border-color: #34d399; }
+  .layer-2 .layer-icon { background: rgba(52, 211, 153, 0.1); }
+  .layer-2 .layer-title { color: #34d399; }
+  .layer-2 .layer-number { color: #34d399; }
+  .layer-2 .factor-card { border-left-color: #34d399; }
+
+  .layer-3 { border-color: rgba(167, 139, 250, 0.3); }
+  .layer-3::before { border-color: #a78bfa; }
+  .layer-3 .layer-icon { background: rgba(167, 139, 250, 0.1); }
+  .layer-3 .layer-title { color: #a78bfa; }
+  .layer-3 .layer-number { color: #a78bfa; }
+  .layer-3 .factor-card { border-left-color: #a78bfa; }
+
+  .layer-4 { border-color: rgba(251, 191, 36, 0.3); }
+  .layer-4::before { border-color: #fbbf24; }
+  .layer-4 .layer-icon { background: rgba(251, 191, 36, 0.1); }
+  .layer-4 .layer-title { color: #fbbf24; }
+  .layer-4 .layer-number { color: #fbbf24; }
+  .layer-4 .factor-card { border-left-color: #fbbf24; }
+
+  .layer-5 { border-color: rgba(251, 113, 133, 0.3); }
+  .layer-5::before { border-color: #fb7185; }
+  .layer-5 .layer-icon { background: rgba(251, 113, 133, 0.1); }
+  .layer-5 .layer-title { color: #fb7185; }
+  .layer-5 .layer-number { color: #fb7185; }
+  .layer-5 .factor-card { border-left-color: #fb7185; }
+
+  .insight-box {
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 32px;
+  }
+  .insight-box h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: #f8fafc;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .insight-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+  }
+  .insight-item {
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .insight-item h4 {
+    font-size: 12px;
+    color: #cbd5e1;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .insight-item p {
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.6;
+  }
+  .formula {
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(0,0,0,0.3);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    color: #34d399;
+    margin-top: 8px;
+    overflow-x: auto;
+  }
+
+  .data-highlight {
+    background: linear-gradient(90deg, rgba(34,211,238,0.1), transparent);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #22d3ee;
+  }
+
+  @media (max-width: 768px) {
+    .factor-grid { grid-template-columns: 1fr; }
+    .layer { margin-left: 36px; padding: 18px; }
+    .layer::before { left: -26px; width: 12px; height: 12px; }
+    .layer-number { left: -42px; font-size: 9px; width: 22px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>Meteora DLMM LP Factor Stack</h1>
+    <div class="subtitle">What drives profitability in Solana concentrated liquidity</div>
+    <div class="badge">Meridian Intelligence v1.1 — May 12, 2026</div>
+  </div>
+
+  <div class="layer-stack">
+
+    <!-- LAYER 1: Market Environment -->
+    <div class="layer layer-1">
+      <span class="layer-number">L1</span>
+      <div class="layer-header">
+        <div class="layer-icon">🌊</div>
+        <div>
+          <div class="layer-title">Market Environment</div>
+          <div class="layer-subtitle">Macro regime determines available alpha</div>
+        </div>
+      </div>
+      <div class="factor-grid">
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>SOL Price Trend</span>
+            <span class="tag tag-critical">Critical</span>
+          </div>
+          <div class="factor-desc">SOL uptrend = more memecoin speculation = higher volumes. SOL downtrend = risk-off = thin liquidity.</div>
+          <div class="factor-value" style="background:rgba(251,113,133,0.1);color:#fb7185;">Monitor SOL/USD 4h trend</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Meme Coin Seasonality</span>
+            <span class="tag tag-high">High</span>
+          </div>
+          <div class="factor-desc">New token launches cluster. Early = high fee capture. Late = rugs and volume collapse.</div>
+          <div class="factor-value" style="background:rgba(251,191,36,0.1);color:#fbbf24;">Track Pump.fun launch velocity</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Overall DEX Volume</span>
+            <span class="tag tag-medium">Medium</span>
+          </div>
+          <div class="factor-desc">Higher aggregate DEX volume correlates with better fee generation across all pools.</div>
+          <div class="factor-value" style="background:rgba(52,211,153,0.1);color:#34d399;">Solana DEX vol >$500M = active</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Market Volatility Regime</span>
+            <span class="tag tag-high">High</span>
+          </div>
+          <div class="factor-desc">Low vol = tight ranges work. High vol = wider bins needed or positions go OOR fast.</div>
+          <div class="factor-value" style="background:rgba(167,139,250,0.1);color:#a78bfa;">VIX-equivalent for SOL</div>
+        </div>
+      </div>
+      <div class="meridian-note">
+        <strong>Meridian Data:</strong> 393 trades across 24 days. Top winners at vol 1.0-3.5 range. Darwin evolved maxVolatility from 5.0→1.4 over 140 trades. Last 50 trades: +0.48% avg PnL (improving from -0.09% all-time).
+      </div>
+    </div>
+
+    <!-- LAYER 2: Pool Fundamentals -->
+    <div class="layer layer-2">
+      <span class="layer-number">L2</span>
+      <div class="layer-header">
+        <div class="layer-icon">🏊</div>
+        <div>
+          <div class="layer-title">Pool Fundamentals</div>
+          <div class="layer-subtitle">Token health + pool economics = LP edge</div>
+        </div>
+      </div>
+      <div class="factor-grid">
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Fee/TVL Ratio</span>
+            <span class="tag tag-critical">Critical</span>
+          </div>
+          <div class="factor-desc">The king metric. Higher fees relative to TVL = more yield per dollar deployed. Target >0.1 (10%) for 24h.</div>
+          <div class="formula">fee_tvl_ratio = fees_24h / tvl</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Volume/TVL Turnover</span>
+            <span class="tag tag-critical">Critical</span>
+          </div>
+          <div class="factor-desc">How often the pool's full TVL trades daily. >20% = healthy. <5% = stagnant.</div>
+          <div class="formula">turnover = volume_24h / tvl</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>TVL Depth</span>
+            <span class="tag tag-high">High</span>
+          </div>
+          <div class="factor-desc">$15K-$150K sweet spot. Too low = whale manipulation. Too high = fees diluted across many LPs.</div>
+          <div class="factor-value" style="background:rgba(52,211,153,0.1);color:#34d399;">Your filter: $10K-$150K</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Bin Step & Base Fee</span>
+            <span class="tag tag-high">High</span>
+          </div>
+          <div class="factor-desc">Bin step 80-125 = optimal for memes. Lower step = more bins = tighter tracking. Base fee 0.5%-2% typical.</div>
+          <div class="formula">effective_fee = baseFactor * binStep / 1e6 * 100</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Token Holder Distribution</span>
+            <span class="tag tag-critical">Critical</span>
+          </div>
+          <div class="factor-desc">Top 10% >50% = manipulation risk. Bot holders >40% = fake volume. Bundle pct >30% = coordinated pump.</div>
+          <div class="factor-value" style="background:rgba(251,113,133,0.1);color:#fb7185;">Your gates: top10<45%, bots<40%, bundle<25%</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Smart Wallet Presence</span>
+            <span class="tag tag-medium">Medium</span>
+          </div>
+          <div class="factor-desc">KOL/alpha wallets trading = signal of quality. But don't follow blindly — they may be farming fees too.</div>
+          <div class="factor-value" style="background:rgba(34,211,238,0.1);color:#22d3ee;">Your config: tracks 27-101 smart wallets</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Token Age & Narrative</span>
+            <span class="tag tag-medium">Medium</span>
+          </div>
+          <div class="factor-desc">24h-7d = highest volatility/fees. >7d = more stable but lower yield. Narrative strength drives sustained volume.</div>
+          <div class="factor-value" style="background:rgba(251,191,36,0.1);color:#fbbf24;">Your min: 24h old, X narrative checked</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Organic Score</span>
+            <span class="tag tag-high">High</span>
+          </div>
+          <div class="factor-desc">Composite of real holder growth, natural volume patterns, low bot activity. Higher = safer LP.</div>
+          <div class="factor-value" style="background:rgba(52,211,153,0.1);color:#34d399;">Your gate: minOrganic=60</div>
+        </div>
+      </div>
+      <div class="meridian-note">
+        <strong>Meridian Data:</strong> 59.8% all-time win rate (393 trades). Lessons subset: 77% WR. Fee/TVL ratio gate (0.1+) and organic score (60+) are the strongest filters. Total fees earned: $171.16. ATH filter just tightened to -25% for both GMGN and Meteora paths.
+      </div>
+    </div>
+
+    <!-- LAYER 3: Position Mechanics -->
+    <div class="layer layer-3">
+      <span class="layer-number">L3</span>
+      <div class="layer-header">
+        <div class="layer-icon">⚙️</div>
+        <div>
+          <div class="layer-title">Position Mechanics</div>
+          <div class="layer-subtitle">How you deploy matters as much as where</div>
+        </div>
+      </div>
+      <div class="factor-grid">
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Bin Range Width</span>
+            <span class="tag tag-critical">Critical</span>
+          </div>
+          <div class="factor-desc">Wider range = less IL but lower fee capture. Narrow = more fees but higher OOR risk. Vol-scaled is key.</div>
+          <div class="formula">bins_below = 35 + (volatility/5) * 34, clamped [35,69]</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Strategy Type</span>
+            <span class="tag tag-high">High</span>
+          </div>
+          <div class="factor-desc">Bid-ask = balanced, most versatile. Spot = single-sided SOL, lower risk. Curve = bell-shaped, for ranging markets.</div>
+          <div class="factor-value" style="background:rgba(167,139,250,0.1);color:#a78bfa;">Your active: bid_ask (100% win rate tested)</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Entry Timing (Active Bin)</span>
+            <span class="tag tag-high">High</span>
+          </div>
+          <div class="factor-desc">Entering near current active bin = immediate fee accrual. Entering far = wait for price to move into range.</div>
+          <div class="formula">ideal: active_bin within lower+10% to upper-10%</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Impermanent Loss Exposure</span>
+            <span class="tag tag-critical">Critical</span>
+          </div>
+          <div class="factor-desc">Single-sided SOL deploy (amount_x=0) eliminates token-side IL risk. You only risk SOL depreciation.</div>
+          <div class="factor-value" style="background:rgba(52,211,153,0.1);color:#34d399;">Your mode: single-side SOL only</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Range Efficiency</span>
+            <span class="tag tag-medium">Medium</span>
+          </div>
+          <div class="factor-desc">% of time price stays in your bins. >90% = optimal. <50% = you're missing fees or taking IL.</div>
+          <div class="formula">efficiency = in_range_time / total_time * 100</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Fee Accrual Rate</span>
+            <span class="tag tag-medium">Medium</span>
+          </div>
+          <div class="factor-desc">Meteora fees accrue per-bin. Your position covers N bins. Active bin swaps generate fees for all LPs in that bin.</div>
+          <div class="formula">fees ~ swap_volume * your_bin_liquidity / total_bin_liquidity</div>
+        </div>
+      </div>
+      <div class="meridian-note">
+        <strong>Meridian Data:</strong> Bid_ask at 0.5 SOL per position. 97% of OOR events are upper (price pumps past range). Avg time to OOR: 37.7 min (median 11.3 min). 45% go OOR within 5 minutes. Top close reasons: trailing TP (35%), upper OOR (25%), band OOR (16%).
+      </div>
+    </div>
+
+    <!-- LAYER 4: Risk Management -->
+    <div class="layer layer-4">
+      <span class="layer-number">L4</span>
+      <div class="layer-header">
+        <div class="layer-icon">🛡️</div>
+        <div>
+          <div class="layer-title">Risk Management</div>
+          <div class="layer-subtitle">Survival first, then profit</div>
+        </div>
+      </div>
+      <div class="factor-grid">
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Stop Loss</span>
+            <span class="tag tag-critical">Critical</span>
+          </div>
+          <div class="factor-desc">Hard floor on loss. Bid-ask can tolerate -15% due to fee offset. Spot/tighter should use -5% to -8%.</div>
+          <div class="factor-value" style="background:rgba(251,113,133,0.1);color:#fb7185;">Your: -6% default, -15% bid_ask</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Trailing Take Profit</span>
+            <span class="tag tag-critical">Critical</span>
+          </div>
+          <div class="factor-desc">Let winners run. Trigger at +5%, close if PnL drops by 2% from peak. Captures momentum while protecting gains.</div>
+          <div class="formula">exit when current_pnl <= peak_pnl - trailing_drop</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>OOR Handling</span>
+            <span class="tag tag-high">High</span>
+          </div>
+          <div class="factor-desc">Out-of-range = no fees + directional exposure. Upper OOR = token pumped (harvest if PnL > threshold). Lower = token dumped (stop loss).</div>
+          <div class="factor-value" style="background:rgba(251,191,36,0.1);color:#fbbf24;">Your: 10-45 min wait depending on band</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Fragility Scoring</span>
+            <span class="tag tag-high">High</span>
+          </div>
+          <div class="factor-desc">Dynamic risk score based on vol, TVL, age, organic flow. Ultrafragile = tighten everything (trailing, OOR wait, stop loss).</div>
+          <div class="factor-value" style="background:rgba(251,113,133,0.1);color:#fb7185;">Your: 3 bands (A/B/C) with diff configs</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Position Sizing</span>
+            <span class="tag tag-high">High</span>
+          </div>
+          <div class="factor-desc">Fixed 0.5 SOL per deploy with 0.3 gas reserve. Never deploy more than wallet can afford to lose across max 3 positions.</div>
+          <div class="formula">max_exposure = 3 * 0.5 = 1.5 SOL + 0.3 reserve</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Pool Blacklist</span>
+            <span class="tag tag-medium">Medium</span>
+          </div>
+          <div class="factor-desc">Permanently exclude rugs, tokens with fake volume, or pools where you consistently lose. Memory persists across restarts.</div>
+          <div class="factor-value" style="background:rgba(34,211,238,0.1);color:#22d3ee;">Auto-learned via Darwin system</div>
+        </div>
+      </div>
+      <div class="meridian-note">
+        <strong>Meridian Data:</strong> Trailing TP is the #1 close reason (35% of trades). Stop losses hit 5 times — worst: MOODANG -68.09%. Risk/reward ratio: 1:0.57 (unfavorable). Band B sizing auto-shrunk from 0.5→0.2 after consistent underperformance. Management bands: A (15%), B (21%), C (11%), legacy (53%).
+      </div>
+    </div>
+
+    <!-- LAYER 5: Execution -->
+    <div class="layer layer-5">
+      <span class="layer-number">L5</span>
+      <div class="layer-header">
+        <div class="layer-icon">⚡</div>
+        <div>
+          <div class="layer-title">Execution Stack</div>
+          <div class="layer-subtitle">Solana-specific operational edge</div>
+        </div>
+      </div>
+      <div class="factor-grid">
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>RPC Reliability</span>
+            <span class="tag tag-critical">Critical</span>
+          </div>
+          <div class="factor-desc">Helius/Pump RPC for fast data. Fallback RPCs if primary fails. Position checks every 3 minutes need <2s response.</div>
+          <div class="factor-value" style="background:rgba(251,113,133,0.1);color:#fb7185;">Your: pump.helius-rpc.com</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Compute Budget</span>
+            <span class="tag tag-high">High</span>
+          </div>
+          <div class="factor-desc">DLMM deploys need 1.2M-1.4M CU. Close needs ~600K. Add 10% buffer. Failed txs = missed opportunity or stuck position.</div>
+          <div class="formula">compute_limit = estimated_cu * 1.1</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Priority Fees</span>
+            <span class="tag tag-medium">Medium</span>
+          </div>
+          <div class="factor-desc">During congestion, priority fees ensure tx lands. 0.001-0.005 SOL typical. Too low = tx dropped. Too high = erodes edge.</div>
+          <div class="factor-value" style="background:rgba(251,191,36,0.1);color:#fbbf24;">Auto-set based on recent landing rate</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>MEV / JITO Protection</span>
+            <span class="tag tag-medium">Medium</span>
+          </div>
+          <div class="factor-desc">Bundle txs via JITO to prevent sandwich attacks on large closes. Tip 0.001-0.01 SOL to validators for front-running protection.</div>
+          <div class="factor-value" style="background:rgba(167,139,250,0.1);color:#a78bfa;">Optional: jito-labs.sh for bundles</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Token Account Rent</span>
+            <span class="tag tag-medium">Medium</span>
+          </div>
+          <div class="factor-desc">Each new token needs ATA (~0.002 SOL rent). Close position should auto-swap back to SOL + close ATA to reclaim rent.</div>
+          <div class="formula">swept = swap(token_balance) - swap_fees - close_rent</div>
+        </div>
+        <div class="factor-card">
+          <div class="factor-name">
+            <span>Automated vs Manual</span>
+            <span class="tag tag-insight">Insight</span>
+          </div>
+          <div class="factor-desc">Manual entry can time better but misses fast moves. Automated = consistent execution but may enter suboptimal. Hybrid = best.</div>
+          <div class="factor-value" style="background:rgba(34,211,238,0.1);color:#22d3ee;">Meridian: Auto-screen + manual override</div>
+        </div>
+      </div>
+      <div class="meridian-note">
+        <strong>Meridian Data:</strong> Auto-swap recovers ~97% of token value to SOL on close. Recent error: 'insufficient funds' on DLMM deploy (3 consecutive failures). Compute unit failures rare but increase during congestion.
+      </div>
+    </div>
+
+  </div>
+
+  <div class="insight-box">
+    <h3>📊 Key Formulas & Meridian Calibrations</h3>
+    <div class="insight-grid">
+      <div class="insight-item">
+        <h4>🎯 Fee Capture Estimate</h4>
+        <p>Expected daily yield from a position</p>
+        <div class="formula">yield_24h = (fee_tvl_ratio * position_size) * range_efficiency</div>
+      </div>
+      <div class="insight-item">
+        <h4>⚖️ Breakeven Days</h4>
+        <p>How long to recover IL + fees vs holding</p>
+        <div class="formula">breakeven = position_size / (daily_fees - daily_il)</div>
+      </div>
+      <div class="insight-item">
+        <h4>📐 Bin Width Formula</h4>
+        <p>Your vol-scaled approach</p>
+        <div class="formula">bins = clamp(35 + vol*6.8, 35, 69) for bins_below</div>
+      </div>
+      <div class="insight-item">
+        <h4>🧠 Darwin Learning</h4>
+        <p>Auto-threshold evolution</p>
+        <div class="formula">new_threshold = old * (winner_boost / loser_penalty)</div>
+      </div>
+      <div class="insight-item">
+        <h4>💰 Position Size</h4>
+        <p>Your current compounding formula</p>
+        <div class="formula">deploy = clamp((wallet - 0.3) * 0.2, 0.5, 0.5)</div>
+      </div>
+      <div class="insight-item">
+        <h4>🔥 Fragility Score</h4>
+        <p>Risk-adjusted management</p>
+        <div class="formula">fragility = f(mcap, age, tvl, organic, vol)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STRATEGY COMPARISON TABLE -->
+  <div class="insight-box" style="margin-top: 32px;">
+    <h3>⚔️ Strategy Comparison: Meteora DLMM</h3>
+    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 20px;">How different position shapes behave under market conditions. Based on Meteora mechanics + LP Army community data.</p>
+    
+    <div style="overflow-x: auto;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+        <thead>
+          <tr style="border-bottom: 2px solid #334155;">
+            <th style="text-align: left; padding: 12px; color: #94a3b8; font-weight: 600;">Strategy</th>
+            <th style="text-align: center; padding: 12px; color: #94a3b8; font-weight: 600;">Shape</th>
+            <th style="text-align: center; padding: 12px; color: #94a3b8; font-weight: 600;">Best For</th>
+            <th style="text-align: center; padding: 12px; color: #94a3b8; font-weight: 600;">Fee Capture</th>
+            <th style="text-align: center; padding: 12px; color: #94a3b8; font-weight: 600;">IL Risk</th>
+            <th style="text-align: center; padding: 12px; color: #94a3b8; font-weight: 600;">OOR Risk</th>
+            <th style="text-align: center; padding: 12px; color: #94a3b8; font-weight: 600;">Complexity</th>
+            <th style="text-align: center; padding: 12px; color: #94a3b8; font-weight: 600;">Meridian Fit</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #1e293b;">
+            <td style="padding: 14px 12px;">
+              <div style="font-weight: 700; color: #22d3ee;">Bid-Ask</div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Balanced two-sided</div>
+            </td>
+            <td style="text-align: center; padding: 12px;">
+              <div style="display: inline-block; width: 60px; height: 30px; background: linear-gradient(90deg, #22d3ee 0%, #0f172a 50%, #34d399 100%); border-radius: 4px; position: relative;">
+                <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #fbbf24; transform: translateX(-50%);"></div>
+              </div>
+            </td>
+            <td style="text-align: center; padding: 12px; color: #cbd5e1;">Moderate vol<br/>Trending markets</td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-high">High</span></td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-medium">Medium</span></td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-medium">Medium</span></td>
+            <td style="text-align: center; padding: 12px; color: #34d399;">Low</td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-insight">ACTIVE</span><div style="font-size:9px;color:#22d3ee;margin-top:4px;">59.8% WR · 393 trades</div></td>
+          </tr>
+          <tr style="border-bottom: 1px solid #1e293b;">
+            <td style="padding: 14px 12px;">
+              <div style="font-weight: 700; color: #fbbf24;">Spot</div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Single-sided SOL</div>
+            </td>
+            <td style="text-align: center; padding: 12px;">
+              <div style="display: inline-block; width: 60px; height: 30px; background: linear-gradient(90deg, #0f172a 0%, #0f172a 60%, #fbbf24 100%); border-radius: 4px;"></div>
+            </td>
+            <td style="text-align: center; padding: 12px; color: #cbd5e1;">Accumulating<br/>Low risk</td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-medium">Medium</span></td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-high">Very Low</span></td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-high">High</span></td>
+            <td style="text-align: center; padding: 12px; color: #34d399;">Low</td>
+            <td style="text-align: center; padding: 12px; color: #64748b;">Backup</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #1e293b;">
+            <td style="padding: 14px 12px;">
+              <div style="font-weight: 700; color: #a78bfa;">Curve</div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Bell-shaped</div>
+            </td>
+            <td style="text-align: center; padding: 12px;">
+              <div style="display: inline-block; width: 60px; height: 30px; background: linear-gradient(90deg, #0f172a 0%, #a78bfa 50%, #0f172a 100%); border-radius: 4px;"></div>
+            </td>
+            <td style="text-align: center; padding: 12px; color: #cbd5e1;">Ranging markets<br/>Mean reversion</td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-high">Very High</span></td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-high">High</span></td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-medium">Medium</span></td>
+            <td style="text-align: center; padding: 12px; color: #fbbf24;">Medium</td>
+            <td style="text-align: center; padding: 12px; color: #64748b;">Untested</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #1e293b;">
+            <td style="padding: 14px 12px;">
+              <div style="font-weight: 700; color: #fb7185;">DAMM v2</div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Dynamic AMM</div>
+            </td>
+            <td style="text-align: center; padding: 12px;">
+              <div style="display: inline-block; width: 60px; height: 30px; background: linear-gradient(90deg, #fb7185 0%, #0f172a 100%); border-radius: 4px;"></div>
+            </td>
+            <td style="text-align: center; padding: 12px; color: #cbd5e1;">New launches<br/>LGE events</td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-high">High</span></td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-critical">Very High</span></td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-critical">Very High</span></td>
+            <td style="text-align: center; padding: 12px; color: #fb7185;">High</td>
+            <td style="text-align: center; padding: 12px; color: #64748b;">Not supported</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #1e293b;">
+            <td style="padding: 14px 12px;">
+              <div style="font-weight: 700; color: #34d399;">Alpha Vault</div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Managed vault</div>
+            </td>
+            <td style="text-align: center; padding: 12px;">
+              <div style="display: inline-block; width: 60px; height: 30px; background: #1e293b; border: 1px solid #34d399; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+                <span style="font-size: 8px; color: #34d399;">AUTO</span>
+              </div>
+            </td>
+            <td style="text-align: center; padding: 12px; color: #cbd5e1;">Passive income<br/>No monitoring</td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-medium">Medium</span></td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-medium">Medium</span></td>
+            <td style="text-align: center; padding: 12px;"><span class="tag tag-medium">Low</span></td>
+            <td style="text-align: center; padding: 12px; color: #34d399;">None</td>
+            <td style="text-align: center; padding: 12px; color: #64748b;">Alternative</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+      <div class="insight-item">
+        <h4>🏆 Bid-Ask Wins For Meridian</h4>
+        <p>Your 60% win rate across 393 trades comes from bid_ask's balanced exposure. It captures fees on both sides of the active bin while keeping IL manageable. The vol-scaled bin width auto-adjusts range to market conditions.</p>
+      </div>
+      <div class="insight-item">
+        <h4>🔥 When to Use Curve</h4>
+        <p>Curve (bell-shaped) concentrates liquidity near the active bin. Best when you expect price to oscillate in a range. LP Army data shows Curve outperforms in sideways markets but gets crushed in strong trends.</p>
+      </div>
+      <div class="insight-item">
+        <h4>🛡️ Spot as Hedge</h4>
+        <p>Single-sided SOL deployment eliminates token IL entirely. You're just selling SOL into rallies. LP Army bear-market guides recommend Spot for capital preservation when volatility spikes above 5.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- LP ARMY ANALYSIS -->
+  <div class="insight-box" style="margin-top: 32px;">
+    <h3>🛡️ LP Army Intelligence</h3>
+    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 20px;">Analysis of <span class="data-highlight">356 strategies</span> from <span class="data-highlight">109 contributors</span> on lparmy.com — the largest Meteora LP community.</p>
+    
+    <div class="insight-grid">
+      <div class="insight-item">
+        <h4>📚 Strategy Distribution</h4>
+        <p>LP Army categorizes into 8 filter types. Their breakdown reveals what the community actually uses:</p>
+        <div style="margin-top: 10px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span style="font-size: 11px; color: #cbd5e1;">DLMM (all types)</span>
+            <span style="font-size: 11px; color: #22d3ee; font-family: 'JetBrains Mono', monospace;">~60%</span>
+          </div>
+          <div style="background: #1e293b; height: 6px; border-radius: 3px; overflow: hidden;">
+            <div style="width: 60%; height: 100%; background: #22d3ee;"></div>
+          </div>
+        </div>
+        <div style="margin-top: 8px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span style="font-size: 11px; color: #cbd5e1;">Bear Market Specific</span>
+            <span style="font-size: 11px; color: #fb7185; font-family: 'JetBrains Mono', monospace;">~25%</span>
+          </div>
+          <div style="background: #1e293b; height: 6px; border-radius: 3px; overflow: hidden;">
+            <div style="width: 25%; height: 100%; background: #fb7185;"></div>
+          </div>
+        </div>
+        <div style="margin-top: 8px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span style="font-size: 11px; color: #cbd5e1;">Beginner / LGE</span>
+            <span style="font-size: 11px; color: #34d399; font-family: 'JetBrains Mono', monospace;">~15%</span>
+          </div>
+          <div style="background: #1e293b; height: 6px; border-radius: 3px; overflow: hidden;">
+            <div style="width: 15%; height: 100%; background: #34d399;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="insight-item">
+        <h4>🎯 Top Creator Themes</h4>
+        <p>The 3 most prolific contributors (NAOJ 33, SATSMONKES 30, Logical TA 20) focus on:</p>
+        <ul style="margin-top: 8px; padding-left: 16px; font-size: 11px; color: #94a3b8; line-height: 1.8;">
+          <li><strong style="color: #cbd5e1;">Fibonacci-based ranges</strong> — Using fib levels to set bin boundaries</li>
+          <li><strong style="color: #cbd5e1;">Bear market survival</strong> – Deep winter accumulation strategies</li>
+          <li><strong style="color: #cbd5e1;">Lazy LP / passive yield</strong> — Set-and-forget with wide ranges</li>
+          <li><strong style="color: #cbd5e1;">Challenge plays</strong> — High-risk, high-reward event farming</li>
+        </ul>
+      </div>
+
+      <div class="insight-item">
+        <h4>⚠️ Community Risk Patterns</h4>
+        <p>Common failure modes documented across 356 strategies:</p>
+        <ul style="margin-top: 8px; padding-left: 16px; font-size: 11px; color: #94a3b8; line-height: 1.8;">
+          <li><span style="color: #fb7185;">Narrow ranges in high vol</span> — OOR within minutes, fees don't cover IL</li>
+          <li><span style="color: #fb7185;">Holding through dumps</span> — "Diamond hands" destroys LP returns</li>
+          <li><span style="color: #fb7185;">Ignoring token distribution</span> — Bundler rugs = instant -50%</li>
+          <li><span style="color: #fb7185;">Over-leveraging</span> — Deploying >50% wallet = no exit room</li>
+        </ul>
+      </div>
+
+      <div class="insight-item">
+        <h4>💡 What Meridian Does Better</h4>
+        <p>Your automated system addresses the top community pain points:</p>
+        <ul style="margin-top: 8px; padding-left: 16px; font-size: 11px; color: #94a3b8; line-height: 1.8;">
+          <li><span style="color: #34d399;">✓</span> Auto-bin-width scaling — No manual fib calculation needed</li>
+          <li><span style="color: #34d399;">✓</span> OOR auto-close — Emotion-free exits at thresholds</li>
+          <li><span style="color: #34d399;">✓</span> Bundler/bot gating — Pre-rug detection before deploy</li>
+          <li><span style="color: #34d399;">✓</span> Position sizing cap — Never deploys >1.5 SOL total</li>
+          <li><span style="color: #34d399;">✓</span> Darwin learning — Auto-tunes based on YOUR history</li>
+        </ul>
+      </div>
+
+      <div class="insight-item" style="grid-column: 1 / -1;">
+        <h4>🔍 LP Army Gaps Meridian Could Fill</h4>
+        <p>Opportunities from analyzing their strategy library:</p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; margin-top: 10px;">
+          <div style="background: rgba(251, 191, 36, 0.05); border: 1px solid rgba(251, 191, 36, 0.2); border-radius: 8px; padding: 12px;">
+            <div style="font-size: 11px; font-weight: 700; color: #fbbf24; margin-bottom: 4px;">Fibonacci Integration</div>
+            <div style="font-size: 10px; color: #94a3b8;">Top creators use fib levels for bin placement. Meridian could auto-calculate fib-based ranges from recent price action.</div>
+          </div>
+          <div style="background: rgba(251, 113, 133, 0.05); border: 1px solid rgba(251, 113, 133, 0.2); border-radius: 8px; padding: 12px;">
+            <div style="font-size: 11px; font-weight: 700; color: #fb7185; margin-bottom: 4px;">Bear Market Mode</div>
+            <div style="font-size: 10px; color: #94a3b8;">25% of LP Army content is bear-specific. Meridian could auto-detect bear regimes and switch to Spot-only + wider ranges.</div>
+          </div>
+          <div style="background: rgba(167, 139, 250, 0.05); border: 1px solid rgba(167, 139, 250, 0.2); border-radius: 8px; padding: 12px;">
+            <div style="font-size: 11px; font-weight: 700; color: #a78bfa; margin-bottom: 4px;">Curve Strategy Toggle</div>
+            <div style="font-size: 10px; color: #94a3b8;">Curve isn't tested in Meridian but LP Army shows it beats bid_ask in ranging markets. Could add as secondary strategy.</div>
+          </div>
+          <div style="background: rgba(34, 211, 238, 0.05); border: 1px solid rgba(34, 211, 238, 0.2); border-radius: 8px; padding: 12px;">
+            <div style="font-size: 11px; font-weight: 700; color: #22d3ee; margin-bottom: 4px;">Challenge/Event Farming</div>
+            <div style="font-size: 10px; color: #94a3b8;">LP Army has high-APY event strategies. Meridian could detect LGEs / new launches and deploy with DAMM-style tight ranges.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIVEMIND SECTION -->
+  <div class="insight-box" style="margin-top: 32px;">
+    <h3>🐝 Hivemind Intelligence</h3>
+    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 20px;">Collective intelligence from <span class="data-highlight">12 shared strategies</span> — all showing positive outcomes. Consensus data from the Meridian hivemind network.</p>
+
+    <div class="insight-grid">
+      <div class="insight-item">
+        <h4>🏆 Consensus Winner</h4>
+        <p><strong style="color: #34d399;">bid_ask + binStep=100</strong> is the hivemind's consensus winning combo. All hivemind entries show 95–100% range efficiency. This matches Meridian's primary strategy.</p>
+      </div>
+      <div class="insight-item">
+        <h4>📈 Spot Strategy Highlights</h4>
+        <p>Spot strategy showing strong results: <span style="color: #34d399; font-weight: 700;">+7.54%</span> (CROWDCAM) and <span style="color: #34d399; font-weight: 700;">+4.72%</span> (BABYTROLL). Note: spotAddEnabled=false — spot deploys are currently disabled in config.</p>
+      </div>
+      <div class="insight-item">
+        <h4>🔗 Range Efficiency</h4>
+        <p>All 12 hivemind shared strategies achieve <strong style="color: #22d3ee;">95–100% range efficiency</strong>. This validates the tight bin ranges used by successful LPs in the network.</p>
+      </div>
+      <div class="insight-item">
+        <h4>💡 Hivemind Insight</h4>
+        <p>All shared strategies report good outcomes. The collective data strongly supports bid_ask at binStep=100 as the default. Consider enabling spotAddEnabled for the CROWDCAM/BABYTROLL-style accumulation plays.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
