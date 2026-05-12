@@ -834,6 +834,36 @@ export async function runScreeningCycle({ silent = false } = {}) {
         return false;
       }
 
+      // ── Standalone hard gate: minimum organic score ──
+      const organicScore = Number(pool.organic_score ?? pool.base?.organic);
+      const minOrganic = Number(config.screening.minOrganic ?? 0);
+      if (Number.isFinite(organicScore) && Number.isFinite(minOrganic) && minOrganic > 0 && organicScore < minOrganic) {
+        log("screening", `Organic gate: dropped ${pool.name} — organic ${organicScore} < min ${minOrganic}`);
+        filteredOut.push({ name: pool.name, reason: `organic ${organicScore} < minimum ${minOrganic}` });
+        return false;
+      }
+
+      // ── Standalone hard gate: minimum volume/TVL turnover ──
+      const volumeWindow = Number(pool.volume_window ?? pool.volume ?? 0);
+      const activeTvl = Number(pool.active_tvl ?? 0);
+      const minTurnover = Number(config.screening.minTurnoverPct ?? 0);
+      if (activeTvl > 0 && Number.isFinite(minTurnover) && minTurnover > 0) {
+        const turnoverPct = (volumeWindow / activeTvl) * 100;
+        if (turnoverPct < minTurnover) {
+          log("screening", `Turnover gate: dropped ${pool.name} — turnover ${turnoverPct.toFixed(1)}% < min ${minTurnover}% (vol=$${volumeWindow}, tvl=$${activeTvl})`);
+          filteredOut.push({ name: pool.name, reason: `turnover ${turnoverPct.toFixed(1)}% < minimum ${minTurnover}%` });
+          return false;
+        }
+      }
+
+      // ── Standalone hard gate: maximum TVL ──
+      const maxTvl = Number(config.screening.maxTvl);
+      if (activeTvl > 0 && Number.isFinite(maxTvl) && maxTvl > 0 && activeTvl > maxTvl) {
+        log("screening", `TVL cap: dropped ${pool.name} — TVL $${activeTvl} > max $${maxTvl}`);
+        filteredOut.push({ name: pool.name, reason: `TVL $${activeTvl} > max $${maxTvl}` });
+        return false;
+      }
+
       const dynamicFeePct = Math.max(0, feePct - Number(pool.base_fee ?? feePct));
       const deadFeeEngine = feeTvl <= 0.02 && dynamicFeePct <= 0.02;
       if (fragility.score >= 30 && deadFeeEngine && feePct <= 0.4) {

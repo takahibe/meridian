@@ -380,13 +380,23 @@ function condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAn
     feeActiveTvlRatio * 1000 +
     Math.max(0, 100 - num(security?.rug_ratio) * 100) * 5;
 
+  // Synthetic organic score from GMGN security signals (0-100)
+  const _rugRatio = num(security?.rug_ratio ?? token.rug_ratio);
+  const _botRate = num(info?.stat?.bot_degen_rate ?? token.bot_degen_rate);
+  const _bundlerRate = num(security?.bundler_trader_amount_rate ?? token.bundler_rate);
+  const _freshRate = num(info?.stat?.fresh_wallet_rate);
+  const _insiderRate = num(security?.rat_trader_amount_rate ?? token.rat_trader_amount_rate);
+  const syntheticOrganic = Math.max(0, Math.min(100, Math.round(
+    100 - _rugRatio * 100 - _botRate * 50 - _bundlerRate * 30 - _freshRate * 15 - _insiderRate * 20
+  )));
+
   return {
     pool: poolAddress,
     name: pool.name || `${token.symbol || info.symbol || "?"}-SOL`,
     base: {
       symbol: token.symbol || info.symbol || pool.token_x?.symbol,
       mint: token.address || info.address || pool.token_x?.address,
-      organic: null,
+      organic: syntheticOrganic,
       warnings: 0,
     },
     quote: {

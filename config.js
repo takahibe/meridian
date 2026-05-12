@@ -83,8 +83,9 @@ export const config = {
     minTvl:            u.minTvl            ?? 10_000,
     maxTvl:            u.maxTvl !== undefined ? u.maxTvl : 150_000,
     minVolume:         u.minVolume         ?? 500,
-    minOrganic:        u.minOrganic        ?? 60,
-    minQuoteOrganic:   u.minQuoteOrganic   ?? 60,
+    minOrganic:          u.minOrganic          ?? 60,
+    minQuoteOrganic:     u.minQuoteOrganic     ?? 60,
+    minTurnoverPct:      u.minTurnoverPct      ?? 20,  // volume/TVL ratio minimum %
     minHolders:        u.minHolders        ?? 500,
     minMcap:           u.minMcap           ?? 150_000,
     maxMcap:           u.maxMcap           ?? 10_000_000,
