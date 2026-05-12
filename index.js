@@ -864,6 +864,23 @@ export async function runScreeningCycle({ silent = false } = {}) {
         return false;
       }
 
+      // ── Standalone hard gate: price momentum (entry timing) ──
+      const velocity5m = Number(pool.gmgn_price_action?.priceChangePct ?? pool.price_change_pct);
+      const maxPumpPct = Number(config.screening.maxPumpPct5m ?? 15);
+      const maxDumpPct = Number(config.screening.maxDumpPct5m ?? 20);
+      if (Number.isFinite(velocity5m)) {
+        if (velocity5m > maxPumpPct) {
+          log("screening", `Momentum gate: dropped ${pool.name} — 5m pump +${velocity5m.toFixed(1)}% > max +${maxPumpPct}% (too hot, wait for pullback)`);
+          filteredOut.push({ name: pool.name, reason: `5m pump +${velocity5m.toFixed(1)}% > max +${maxPumpPct}%` });
+          return false;
+        }
+        if (velocity5m < -maxDumpPct) {
+          log("screening", `Momentum gate: dropped ${pool.name} — 5m dump ${velocity5m.toFixed(1)}% < -${maxDumpPct}% (falling knife)`);
+          filteredOut.push({ name: pool.name, reason: `5m dump ${velocity5m.toFixed(1)}% < -${maxDumpPct}%` });
+          return false;
+        }
+      }
+
       const dynamicFeePct = Math.max(0, feePct - Number(pool.base_fee ?? feePct));
       const deadFeeEngine = feeTvl <= 0.02 && dynamicFeePct <= 0.02;
       if (fragility.score >= 30 && deadFeeEngine && feePct <= 0.4) {

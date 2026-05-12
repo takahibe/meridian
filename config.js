@@ -106,7 +106,9 @@ export const config = {
     blockedLaunchpads:  u.blockedLaunchpads  ?? [],  // e.g. ["letsbonk.fun", "pump.fun"]
     minTokenAgeHours:   u.minTokenAgeHours   ?? 2, // null = no minimum
     maxTokenAgeHours:   u.maxTokenAgeHours   ?? 240, // null = no maximum
-    athFilterPct:       u.athFilterPct       ?? -10, // e.g. -20 = only deploy if price is >= 20% below ATH
+    athFilterPct:        u.athFilterPct        ?? -10,
+    maxPumpPct5m:        u.maxPumpPct5m        ?? 15,   // reject if 5m pump > this %
+    maxDumpPct5m:        u.maxDumpPct5m        ?? 20,   // reject if 5m dump > this % (falling knife)
     maxVolatility:      u.maxVolatility      ?? 5.0,  // evolved by lessons system
     minVolatility:    u.minVolatility    ?? 1.0,   // hard floor — below this, fees are too thin
     maxVolatilityHard: u.maxVolatilityHard ?? 3.5,   // hard ceiling — distinct from soft maxVolatility
