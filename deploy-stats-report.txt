@@ -1,0 +1,152 @@
+========================================================================
+        POOL-MEMORY DEPLOY ANALYSIS  —  STRUCTURED SUMMARY
+========================================================================
+
+═══ OVERALL ═══
+  Total deploys:        71
+  Total pools:          25
+  Win rate (pnl>=0):    46/71 = 64.8%
+  Mean PnL%:            0.2476%
+  Median PnL%:          0.1400%
+  StdDev PnL%:          2.9859%
+  Min PnL%:             -14.7400%
+  Max PnL%:             9.1900%
+  Mean fees USD:        $0.464053
+  Median fees USD:      $0.025250
+  Total fees USD:       $32.9477
+  Mean fee_earned_pct:  1.0195%
+  Mean duration (min):  49.9
+  Median duration (min):33.0
+  Strategy:             {'bid_ask'}
+
+═══ BY MANAGEMENT BAND ═══
+
+  Band A:
+    Count:             22
+    Win rate:          18/22 = 81.8%
+    Mean PnL%:         1.1036%
+    Median PnL%:       0.3650%
+    Mean fees USD:     $0.674611
+    Total fees USD:    $14.8414
+    Mean fee_earned%:  1.4465%
+
+  Band B:
+    Count:             40
+    Win rate:          24/40 = 60.0%
+    Mean PnL%:         0.5195%
+    Median PnL%:       0.1050%
+    Mean fees USD:     $0.285327
+    Total fees USD:    $11.4131
+    Mean fee_earned%:  0.6374%
+
+  Band C:
+    Count:             6
+    Win rate:          4/6 = 66.7%
+    Mean PnL%:         0.4150%
+    Median PnL%:       0.3950%
+    Mean fees USD:     $0.214167
+    Total fees USD:    $1.2850
+    Mean fee_earned%:  0.4883%
+
+  Band unknown (no band in close_reason):
+    Count:             3
+    Win rate:          0/3 = 0.0%
+    Mean PnL%:         -9.9900%
+    Median PnL%:       -14.0700%
+    Mean fees USD:     $1.802743
+    Total fees USD:    $5.4082
+    Mean fee_earned%:  4.0435%
+
+═══ CLOSE REASON DISTRIBUTION ═══
+  OOR                    40 deploys  Win:  21/40=52%  MeanPnL:    0.1240%
+  Trailing TP            15 deploys  Win: 15/15=100%  MeanPnL:    2.6000%
+  Protective Close       12 deploys  Win:   9/12=75%  MeanPnL:    0.1675%
+  Stop Loss               2 deploys  Win:     0/2=0%  MeanPnL:  -14.4050%
+  Low Yield               1 deploys  Win:     0/1=0%  MeanPnL:   -1.1600%
+  Harvest Close           1 deploys  Win:   1/1=100%  MeanPnL:    1.5800%
+
+═══ RAW CLOSE REASONS (frequency) ═══
+  [12] Upper OOR close (Band B): out of range for 4m (limit: 4m)
+  [ 5] Upper OOR close (Band B): out of range for 3m (limit: 3m)
+  [ 4] Upper OOR close (Band A): out of range for 7m (limit: 7m)
+  [ 3] Upper OOR close (Band B): out of range for 8m (limit: 4m)
+  [ 2] Upper OOR close (Band B): out of range for 5m (limit: 4m)
+  [ 2] Upper OOR close (Band A): out of range for 8m (limit: 7m)
+  [ 2] Upper OOR close (Band C): out of range for 2m (limit: 2m)
+  [ 2] Upper OOR close (Band A): out of range for 11m (limit: 7m)
+  [ 2] Upper OOR close (Band A): out of range for 9m (limit: 7m)
+  [ 1] Upper OOR close (Band C): out of range for 2m (limit: 1m)
+  [ 1] Protective close (Band B): pumped above range but pnl 0.20% < 1.5% threshold
+  [ 1] Trailing TP (Band C): peak 1.03% → current 0.22% (drop 0.81% >= 0.75%)
+  [ 1] Low yield: fee/TVL 2.06% < min 5% (age: 180m)
+  [ 1] Protective close (Band A): pumped above range but pnl -0.16% < 2% threshold
+  [ 1] Trailing TP (Band B): peak 2.69% → current 1.76% (drop 0.93% >= 0.75%)
+  [ 1] Upper OOR close (Band A): out of range for 8m (limit: 8m)
+  [ 1] Harvest close (Band B): pumped above range with pnl 1.64% >= 1.5% threshold
+  [ 1] Stop loss: PnL -15.37% <= -15% (bid_ask)
+  [ 1] Protective close (Band B): pumped above range but pnl 0.26% < 1.5% threshold
+  [ 1] Protective close (Band A): pumped above range but pnl 1.11% < 2% threshold
+  [ 1] Protective close (Band C): pumped above range but pnl 0.20% < 1% threshold
+  [ 1] Upper OOR close (Band B): out of range for 5m (limit: 3m)
+  [ 1] Protective close (Band A): pumped above range but pnl -0.26% < 2% threshold
+  [ 1] Trailing TP (Band C): peak 1.57% → current 0.59% (drop 0.98% >= 0.75%)
+  [ 1] Trailing TP (Band B): peak 10.46% → current 8.36% (drop 2.10% >= 0.75%)
+  [ 1] Protective close (Band B): pumped above range but pnl -0.02% < 1.5% threshold
+  [ 1] Trailing TP (Band B): peak 1.55% → current 0.65% (drop 0.90% >= 0.75%)
+  [ 1] Trailing TP (Band A): peak 6.51% → current 5.60% (drop 0.91% >= 0.75%)
+  [ 1] Protective close (Band B): pumped above range but pnl -0.98% < 1.5% threshold
+  [ 1] Trailing TP (Band B): peak 1.76% → current 0.27% (drop 1.49% >= 0.75%)
+  [ 1] Protective close (Band A): pumped above range but pnl 0.33% < 2% threshold
+  [ 1] Upper OOR close (Band A): out of range for 12m (limit: 8m)
+  [ 1] Protective close (Band A): pumped above range but pnl 0.43% < 2% threshold
+  [ 1] Trailing TP (Band B): peak 2.03% → current 1.20% (drop 0.83% >= 0.75%)
+  [ 1] Trailing TP (Band B): peak 2.19% → current 1.07% (drop 1.12% >= 0.75%)
+  [ 1] Trailing TP (Band A): peak 5.92% → current 5.13% (drop 0.79% >= 0.75%)
+  [ 1] Protective close (Band B): pumped above range but pnl 0.49% < 1.5% threshold
+  [ 1] Upper OOR close (Band B): out of range for 7m (limit: 4m)
+  [ 1] Trailing TP (Band A): peak 2.47% → current -0.95% (drop 3.42% >= 0.75%)
+  [ 1] Stop loss: PnL -16.20% <= -15% (bid_ask)
+  [ 1] Protective close (Band B): pumped above range but pnl 0.24% < 1.5% threshold
+  [ 1] Trailing TP (Band A): peak 6.60% → current 5.35% (drop 1.25% >= 1.25%)
+  [ 1] Upper OOR close (Band B): out of range for 6m (limit: 4m)
+  [ 1] Trailing TP (Band B): peak 1.57% → current 0.80% (drop 0.77% >= 0.75%)
+  [ 1] Trailing TP (Band A): peak 3.48% → current 2.43% (drop 1.05% >= 0.75%)
+  [ 1] Trailing TP (Band B): peak 2.52% → current 1.66% (drop 0.86% >= 0.75%)
+
+═══ CORRELATIONS ═══
+  fee_tvl_ratio vs pnl_pct             Insufficient data (n=0)
+  volatility_at_deploy vs pnl_pct      r = +0.1767  (n=28)
+  range_efficiency vs pnl_pct          r = +0.1238  (n=71)
+  minutes_held vs pnl_pct              r = +0.1361  (n=71)
+
+═══ FEE-ONLY PROFITABILITY ═══
+  Earned any fees:            69/71 = 97.2%
+  Fee covers full loss:       3/25 losers = 12.0%
+
+═══ DURATION ANALYSIS ═══
+  Band A           mean=  63.2m  median=  47.5m  min=6m  max=165m  n=22
+  Band B           mean=  35.2m  median=  14.5m  min=1m  max=155m  n=40
+  Band C           mean=  69.8m  median=  52.0m  min=2m  max=155m  n=6
+  Band unknown     mean= 109.0m  median= 114.0m  min=33m  max=180m  n=3
+
+═══ PER-POOL SUMMARY (top 15 by deploy count) ═══
+  Pool                       Dep    WinRate    MeanPnL   TotFees$
+  HANTA-SOL                   13   8/13=62%     1.285% $   9.8805
+  Apple-SOL                   10   6/10=60%     0.306% $   1.2424
+  HENTAI-SOL                   6   6/6=100%     1.380% $   4.0332
+  SCAM-SOL                     5    4/5=80%     0.654% $   1.1059
+  LIMINAL-SOL                  5    3/5=60%     0.296% $   1.0088
+  Wish-SOL                     4    3/4=75%    -0.180% $   0.1255
+  Bear-SOL                     4    3/4=75%     1.615% $   3.0686
+  PUP-SOL                      3    2/3=67%     0.313% $   0.5011
+  USDUC-SOL                    3    2/3=67%     0.613% $   0.8123
+  BABYTROLL-SOL                3    2/3=67%     0.020% $   0.1403
+  CROWDCAM-SOL                 3    2/3=67%     1.013% $   1.4680
+  unc-SOL                      2    1/2=50%     0.160% $   0.0862
+  UAP-SOL                      2    1/2=50%    -6.840% $   5.3939
+  Staccana-SOL                 1     0/1=0%    -0.060% $   0.1386
+  GME-SOL                      1     0/1=0%   -14.740% $   2.8175
+
+========================================================================
+CSV on stdout | Stats on stderr | 71 deploys across 25 pools
+========================================================================
