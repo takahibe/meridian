@@ -219,6 +219,8 @@ export const config = {
     spotAddSizePct:            u.spotAddSizePct            ?? 0.5,  // fraction of original deploy amount
     minSolToOpen:          u.minSolToOpen          ?? 0.55,
     deployAmountSol:       u.deployAmountSol       ?? 0.5,
+    deployAmountSolMin:    u.deployAmountSolMin    ?? 0.35,  // weak SOL floor
+    deployAmountSolMax:    u.deployAmountSolMax    ?? 0.75,  // strong SOL ceil
     bandDeployEnabled:     u.bandDeployEnabled     ?? false,
     bandBSizeMultiplier:   u.bandBSizeMultiplier   ?? 0.5,
     gasReserve:            u.gasReserve            ?? 0.2,
@@ -347,25 +349,42 @@ if (config.screening.screenerFunnelEnabled && !process.env.X_BEARER_TOKEN) {
 
 /**
  * Compute the optimal deploy amount for a given wallet balance.
- * Scales position size with wallet growth (compounding).
+ * Scales position size with wallet growth (compounding) AND SOL market trend.
  *
- * Formula: clamp(deployable × positionSizePct, floor=deployAmountSol, ceil=maxDeployAmount)
+ * SOL trend scaling (7d price change):
+ *   Weak  (< -10%): floor = deployAmountSolMin (0.35), ceil = deployAmountSol
+ *   Neutral:         floor = deployAmountSol (0.50),  ceil = deployAmountSol
+ *   Strong (> +15%): floor = deployAmountSol (0.50),  ceil = deployAmountSolMax (0.75)
  *
- * Examples (defaults: gasReserve=0.2, positionSizePct=0.35, floor=0.5):
- *   0.8 SOL wallet → 0.6 SOL deploy  (floor)
- *   2.0 SOL wallet → 0.63 SOL deploy
- *   3.0 SOL wallet → 0.98 SOL deploy
- *   4.0 SOL wallet → 1.33 SOL deploy
+ * Formula: clamp(deployable × positionSizePct, floor, ceil)
+ *
+ * @param {number} walletSol — current SOL balance
+ * @param {number|null} solTrendPct — 7d SOL price change % (null = neutral)
  */
-export function computeDeployAmount(walletSol) {
+export function computeDeployAmount(walletSol, solTrendPct = null) {
   const reserve  = config.management.gasReserve      ?? 0.2;
   const pct      = config.management.positionSizePct ?? 0.35;
-  const floor    = config.management.deployAmountSol;
-  const ceil     = config.risk.maxDeployAmount;
+  const baseFloor = config.management.deployAmountSol;      // 0.50 (neutral)
+  const minFloor  = config.management.deployAmountSolMin;   // 0.35 (weak SOL)
+  const maxCeil   = config.management.deployAmountSolMax;   // 0.75 (strong SOL)
   const deployable = Math.max(0, walletSol - reserve);
   const dynamic    = deployable * pct;
-  const hardCap    = Math.min(ceil, floor);
-  const result     = Math.min(hardCap, Math.max(floor, dynamic));
+
+  // Determine floor and ceil based on SOL trend
+  let floor = baseFloor;
+  let ceil  = baseFloor; // default: fixed at base (neutral)
+
+  if (solTrendPct != null && minFloor != null && solTrendPct < -10) {
+    // SOL is weak — lower the floor to keep smaller positions active
+    floor = minFloor;
+    ceil  = baseFloor;
+  } else if (solTrendPct != null && maxCeil != null && solTrendPct > 15) {
+    // SOL is strong — allow scaling up
+    floor = baseFloor;
+    ceil  = maxCeil;
+  }
+
+  const result = Math.min(ceil, Math.max(floor, dynamic));
   return parseFloat(result.toFixed(2));
 }
 

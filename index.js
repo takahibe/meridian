@@ -10,6 +10,7 @@ import { getWalletBalances, sweepPendingTokens } from "./tools/wallet.js";
 import { getTopCandidates } from "./tools/screening.js";
 import { formatGmgnCandidateForPrompt } from "./tools/gmgn.js";
 import { config, reloadScreeningThresholds, computeDeployAmount } from "./config.js";
+import { recordSolPrice, getSolTrend, getSolTrendSummary } from "./tools/price-tracker.js";
 import { evolveThresholds, getPerformanceSummary, getRecentWinRate } from "./lessons.js";
 import { executeTool, registerCronRestarter } from "./tools/executor.js";
 import {
@@ -704,18 +705,24 @@ export async function runScreeningCycle({ silent = false } = {}) {
   try {
     // Reuse pre-fetched balance — no extra RPC call needed
     const currentBalance = preBalance;
-    const baseDeployAmount = computeDeployAmount(currentBalance.sol);
+    // Record SOL price for trend tracking
+    if (currentBalance.sol_price > 0) recordSolPrice(currentBalance.sol_price);
+    // Get SOL 7d trend for adaptive sizing
+    const solTrend = getSolTrend(168);
+    const solTrendPct = solTrend?.changePct ?? null;
+    if (solTrend) log("cron", getSolTrendSummary());
+    const baseDeployAmount = computeDeployAmount(currentBalance.sol, solTrendPct);
     // Adaptive sizing: reduce by 30% if recent win rate is poor (< 30% over last 10 positions)
     const recentWinRate = getRecentWinRate(10);
     const drawdownMultiplier = (recentWinRate != null && recentWinRate < 0.30) ? 0.70 : 1.0;
     const deployAmount = Math.max(
       parseFloat((baseDeployAmount * drawdownMultiplier).toFixed(2)),
-      config.management.deployAmountSol
+      config.management.deployAmountSolMin ?? 0.35
     );
     if (drawdownMultiplier < 1.0) {
-      log("cron", `Adaptive sizing: reduced deploy ${baseDeployAmount} → ${deployAmount} SOL (win rate ${(recentWinRate * 100).toFixed(0)}% < 30%, floor: ${config.management.deployAmountSol})`);
+      log("cron", `Adaptive sizing: reduced deploy ${baseDeployAmount} → ${deployAmount} SOL (win rate ${(recentWinRate * 100).toFixed(0)}% < 30%, floor: ${config.management.deployAmountSolMin ?? 0.35})`);
     }
-    log("cron", `Computed deploy amount: ${deployAmount} SOL (wallet: ${currentBalance.sol} SOL)`);
+    log("cron", `Computed deploy amount: ${deployAmount} SOL (wallet: ${currentBalance.sol} SOL | SOL 7d: ${solTrendPct != null ? solTrendPct.toFixed(1) + "%" : "n/a"})`);
 
     // Load active strategy
     const activeStrategy = getActiveStrategy();
@@ -1879,7 +1886,8 @@ function describeLatestCandidates(limit = 5) {
 }
 
 function formatWalletStatus(wallet, positions) {
-  const deployAmount = computeDeployAmount(wallet.sol);
+  const solTrend = getSolTrend(168);
+  const deployAmount = computeDeployAmount(wallet.sol, solTrend?.changePct ?? null);
   const hive = isHiveMindEnabled() ? "on" : "off";
   return [
     `Wallet: ${wallet.sol} SOL ($${wallet.sol_usd})`,
@@ -2323,7 +2331,8 @@ async function deployLatestCandidate(index) {
   if (!candidate) {
     throw new Error("Invalid candidate index. Run /screen first.");
   }
-  const deployAmount = computeDeployAmount((await getWalletBalances()).sol);
+  const solTrend = getSolTrend(168);
+  const deployAmount = computeDeployAmount((await getWalletBalances()).sol, solTrend?.changePct ?? null);
   const binsBelow = computeBinsBelow(candidate.volatility);
   const result = await executeTool("deploy_position", {
     pool_address: candidate.pool,
