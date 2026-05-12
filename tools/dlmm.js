@@ -29,6 +29,7 @@ import { normalizeMint } from "./wallet.js";
 import { computeBinsBelow, getRecommendedBins } from "./bin-policy.js";
 import { appendDecision } from "../decision-log.js";
 import { getAndClearStagedSignals } from "../signal-tracker.js";
+import { buildComputeBudgetIx, prependComputeBudget } from "./priority-fee.js";
 
 // ─── Lazy SDK loader ───────────────────────────────────────────
 // @meteora-ag/dlmm → @coral-xyz/anchor uses CJS directory imports
@@ -77,14 +78,73 @@ async function getDLMM() {
 // Avoids crashing on import when WALLET_PRIVATE_KEY is not yet set
 // (e.g. during screening-only tests).
 let _connection = null;
-let _wallet = null;
+let _connectionFallback = null;
+let _activeRpc = "primary";  // "primary" or "fallback"
+let _lastPrimaryCheckAt = 0;
+const PRIMARY_RECHECK_MS = 60_000; // recheck primary every 60s when on fallback
 
 function getConnection() {
   if (!_connection) {
     _connection = new Connection(process.env.RPC_URL, "confirmed");
   }
+  if (_activeRpc === "fallback" && _connectionFallback) {
+    return _connectionFallback;
+  }
   return _connection;
 }
+
+function getFallbackConnection() {
+  const fallbackUrl = process.env.RPC_FALLBACK_URL;
+  if (!fallbackUrl) return null;
+  if (!_connectionFallback) {
+    _connectionFallback = new Connection(fallbackUrl, "confirmed");
+  }
+  return _connectionFallback;
+}
+
+/**
+ * Execute an RPC call with automatic failover.
+ * If the primary RPC fails, switches to fallback and retries.
+ * Periodically rechecks primary to switch back when it recovers.
+ */
+export async function withRpcFailover(fn, label = "rpc") {
+  // If currently on fallback, check if primary has recovered
+  if (_activeRpc === "fallback") {
+    const now = Date.now();
+    if (now - _lastPrimaryCheckAt > PRIMARY_RECHECK_MS) {
+      _lastPrimaryCheckAt = now;
+      try {
+        await _connection.getSlot("confirmed");
+        log("rpc", `Primary RPC recovered — switching back from fallback`);
+        _activeRpc = "primary";
+      } catch {
+        // Primary still down, stay on fallback
+      }
+    }
+  }
+
+  try {
+    return await fn(getConnection());
+  } catch (primaryErr) {
+    const fallback = getFallbackConnection();
+    if (!fallback) throw primaryErr; // no fallback configured
+
+    log("rpc_warn", `Primary RPC failed (${label}): ${primaryErr.message} — trying fallback`);
+    _activeRpc = "primary"; // reset to try primary first next time via health check
+    try {
+      const result = await fn(fallback);
+      _activeRpc = "fallback";
+      _lastPrimaryCheckAt = Date.now();
+      log("rpc", `Fallback RPC succeeded for ${label}`);
+      return result;
+    } catch (fallbackErr) {
+      log("rpc_error", `Both RPCs failed for ${label}: primary=${primaryErr.message}, fallback=${fallbackErr.message}`);
+      throw primaryErr; // throw the original error
+    }
+  }
+}
+
+let _wallet = null;
 
 function getWallet() {
   if (!_wallet) {
@@ -95,6 +155,41 @@ function getWallet() {
     log("init", `Wallet: ${_wallet.publicKey.toString()}`);
   }
   return _wallet;
+}
+
+/**
+ * Send a transaction with compute budget instructions prepended and RPC failover.
+ * @param {Transaction} tx - Original unsigned transaction
+ * @param {Keypair[]} signers - Signers for the transaction
+ * @param {string} operation - 'deploy' | 'close' | 'claim' | 'swap'
+ * @param {number} [cuLimit] - Override CU limit
+ */
+async function sendTxWithBudget(tx, signers, operation, cuLimit) {
+  const conn = getConnection();
+  const budgetIx = await buildComputeBudgetIx(conn, operation, cuLimit);
+  const wrapped = prependComputeBudget(tx, budgetIx);
+  // Copy feePayer and blockhash from original if not set
+  if (!wrapped.feePayer && tx.feePayer) wrapped.feePayer = tx.feePayer;
+  if (!wrapped.recentBlockhash && tx.recentBlockhash) wrapped.recentBlockhash = tx.recentBlockhash;
+  // If still no blockhash, fetch one
+  if (!wrapped.recentBlockhash) {
+    const { blockhash } = await conn.getLatestBlockhash("confirmed");
+    wrapped.recentBlockhash = blockhash;
+    wrapped.feePayer = signers[0].publicKey;
+  }
+  try {
+    return await sendAndConfirmTransaction(conn, wrapped, signers);
+  } catch (primaryErr) {
+    const fallback = getFallbackConnection();
+    if (!fallback) throw primaryErr;
+    log("rpc_warn", `sendTx failed on primary (${operation}): ${primaryErr.message} — retrying on fallback`);
+    _activeRpc = "fallback";
+    _lastPrimaryCheckAt = Date.now();
+    // Re-fetch blockhash for fallback RPC
+    const { blockhash } = await fallback.getLatestBlockhash("confirmed");
+    wrapped.recentBlockhash = blockhash;
+    return await sendAndConfirmTransaction(fallback, wrapped, signers);
+  }
 }
 
 function getMeridianApiBase() {
@@ -925,7 +1020,7 @@ export async function deployPosition({
       const createTxArray = Array.isArray(createTxs) ? createTxs : [createTxs];
       for (let i = 0; i < createTxArray.length; i++) {
         const signers = i === 0 ? [wallet, newPosition] : [wallet];
-        const txHash = await sendAndConfirmTransaction(getConnection(), createTxArray[i], signers);
+        const txHash = await sendTxWithBudget(createTxArray[i], signers, 'deploy');
         txHashes.push(txHash);
         log("deploy", `Create tx ${i + 1}/${createTxArray.length}: ${txHash}`);
       }
@@ -941,7 +1036,7 @@ export async function deployPosition({
       });
       const addTxArray = Array.isArray(addTxs) ? addTxs : [addTxs];
       for (let i = 0; i < addTxArray.length; i++) {
-        const txHash = await sendAndConfirmTransaction(getConnection(), addTxArray[i], [wallet]);
+        const txHash = await sendTxWithBudget(addTxArray[i], [wallet], 'deploy');
         txHashes.push(txHash);
         log("deploy", `Add liquidity tx ${i + 1}/${addTxArray.length}: ${txHash}`);
       }
@@ -955,7 +1050,7 @@ export async function deployPosition({
         strategy: { maxBinId, minBinId, strategyType },
         slippage: 1000, // 10% in bps
       });
-      const txHash = await sendAndConfirmTransaction(getConnection(), tx, [wallet, newPosition]);
+      const txHash = await sendTxWithBudget(tx, [wallet, newPosition], 'deploy');
       txHashes.push(txHash);
     }
 
@@ -1552,7 +1647,7 @@ export async function claimFees({ position_address }) {
 
     const txHashes = [];
     for (const tx of txs) {
-      const txHash = await sendAndConfirmTransaction(getConnection(), tx, [wallet]);
+      const txHash = await sendTxWithBudget(tx, [wallet], 'claim');
       txHashes.push(txHash);
     }
     log("claim", `SUCCESS txs: ${txHashes.join(", ")}`);
@@ -1841,7 +1936,7 @@ export async function closePosition({ position_address, reason, emergency = fals
         });
         if (claimTxs && claimTxs.length > 0) {
           for (const tx of claimTxs) {
-            const claimHash = await sendAndConfirmTransaction(getConnection(), tx, [wallet]);
+            const claimHash = await sendTxWithBudget(tx, [wallet], 'claim');
             claimTxHashes.push(claimHash);
           }
           log("close", `Step 1 OK (claim only): ${claimTxHashes.join(", ")}`);
@@ -1880,7 +1975,7 @@ export async function closePosition({ position_address, reason, emergency = fals
       });
 
       for (const tx of Array.isArray(closeTx) ? closeTx : [closeTx]) {
-        const txHash = await sendAndConfirmTransaction(getConnection(), tx, [wallet]);
+        const txHash = await sendTxWithBudget(tx, [wallet], 'close');
         closeTxHashes.push(txHash);
       }
     } else {
@@ -1890,7 +1985,7 @@ export async function closePosition({ position_address, reason, emergency = fals
           owner: wallet.publicKey,
           position: { publicKey: positionPubKey },
         });
-        const txHash = await sendAndConfirmTransaction(getConnection(), closeTx, [wallet]);
+        const txHash = await sendTxWithBudget(closeTx, [wallet], 'close');
         closeTxHashes.push(txHash);
       } catch (e) {
         const message = String(e?.message || e);

@@ -344,6 +344,18 @@ export const config = {
     rsiOverbought: indicatorUserConfig.rsiOverbought ?? 80,
     requireAllIntervals: indicatorUserConfig.requireAllIntervals ?? false,
   },
+
+  // ─── Execution (Layer 5) ─────────────────────────
+  execution: {
+    priorityFeeFloor: u.priorityFeeFloor ?? 100,        // min μL/CU (100 ≈ 0.0001 SOL per 1M CU)
+    priorityFeeCap:   u.priorityFeeCap ?? 100_000,      // max μL/CU (hard cap to prevent runaway fees)
+    cuLimits: {
+      deploy: u.cuLimitDeploy ?? 1_400_000,
+      close:  u.cuLimitClose ?? 800_000,
+      claim:  u.cuLimitClaim ?? 400_000,
+      swap:   u.cuLimitSwap ?? 400_000,
+    },
+  },
 };
 
 if (config.screening.screenerFunnelEnabled && !process.env.X_BEARER_TOKEN) {
