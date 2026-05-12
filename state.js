@@ -868,7 +868,7 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
       const waitLimit = dir === "upper"
         ? (bandConfig.upperOorWaitMinutes ?? mgmtConfig.outOfRangeWaitMinutesUpper ?? mgmtConfig.outOfRangeWaitMinutes)
         : dir === "lower"
-        ? (mgmtConfig.outOfRangeWaitMinutesLower ?? mgmtConfig.outOfRangeWaitMinutes)
+        ? (bandConfig.lowerOorWaitMinutes ?? mgmtConfig.outOfRangeWaitMinutesLower ?? mgmtConfig.outOfRangeWaitMinutes)
         : mgmtConfig.outOfRangeWaitMinutes;
       if (minutesOOR >= waitLimit) {
         return {
@@ -882,9 +882,25 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
     }
   }
 
-  // ── Low yield (only after position has had time to accumulate fees) ───
+  // ── Fee-decay fragility signal (GAP-C) ────────────────────────
+  // Compare current fee/TVL vs deploy-time; if decayed >50%, pool engine stalled.
   const { age_minutes } = positionData;
   const minAgeForYieldCheck = mgmtConfig.minAgeBeforeYieldCheck ?? 60;
+  if (!inManualGrace && (age_minutes ?? 0) >= minAgeForYieldCheck) {
+    const deployFeeTvl = pos.fee_tvl_ratio ?? pos.initial_fee_tvl_24h ?? null;
+    const currentFeeTvl = fee_per_tvl_24h ?? null;
+    if (deployFeeTvl != null && deployFeeTvl > 0 && currentFeeTvl != null) {
+      const decayPct = ((deployFeeTvl - currentFeeTvl) / deployFeeTvl) * 100;
+      if (decayPct >= 50) {
+        return {
+          action: "FEE_DECAY",
+          reason: `Fee-decay fragility: fee/TVL decayed ${decayPct.toFixed(0)}% (deploy: ${deployFeeTvl.toFixed(2)}% → current: ${currentFeeTvl.toFixed(2)}%)`,
+        };
+      }
+    }
+  }
+
+  // ── Low yield (only after position has had time to accumulate fees) ───
   if (
     !inManualGrace &&
     fee_per_tvl_24h != null &&

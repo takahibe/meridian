@@ -52,6 +52,20 @@ function isUpperOorCloseReason(reason) {
     /out of range\s*\(upper\)/.test(t);
 }
 
+/**
+ * GAP-B: Check if close reason is a LOWER-OOR close (dumped below range).
+ * Used for directional OOR cooldown — only lower-OOR closes count toward
+ * the 3x repeat cooldown, since upper-OOR = profitable pump-out.
+ */
+function isLowerOorCloseReason(reason) {
+  const t = String(reason || "").trim().toLowerCase();
+  // Match "Lower OOR close (Band X):" and "OOR below lower bin"
+  if (/lower oor close/.test(t) || /oor below/.test(t)) return true;
+  // Generic OOR/OUT_OF_RANGE that is NOT upper-OOR
+  if ((t.includes("out of range") || t === "oor" || t.includes("oor")) && !isUpperOorCloseReason(reason)) return true;
+  return false;
+}
+
 function isAdjustedWinRateExcludedReason(reason) {
   const text = String(reason || "").trim().toLowerCase();
   return text.includes("out of range") ||
@@ -199,9 +213,11 @@ export function recordPoolDeploy(poolAddress, deployData) {
   const oorTriggerCount = config.management.oorCooldownTriggerCount ?? 3;
   const oorCooldownHours = config.management.oorCooldownHours ?? 12;
   const recentDeploys = entry.deploys.slice(-oorTriggerCount);
+  // GAP-B: Only count LOWER-OOR closes toward the repeat cooldown.
+  // Upper-OOR = profitable pump-out (price pumped above range), not a failure.
   const repeatedOorCloses =
     recentDeploys.length >= oorTriggerCount &&
-    recentDeploys.every((d) => isOorCloseReason(d.close_reason));
+    recentDeploys.every((d) => isLowerOorCloseReason(d.close_reason));
 
   if (repeatedOorCloses) {
     const reason = `repeated OOR closes (${oorTriggerCount}x)`;

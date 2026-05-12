@@ -238,6 +238,7 @@ export const config = {
         trailingTriggerPct: u.managementBandATrailingTriggerPct ?? 4.0,
         trailingDropPct: u.managementBandATrailingDropPct ?? 1.75,
         upperOorWaitMinutes: u.managementBandAUpperOorWaitMinutes ?? 9,
+        lowerOorWaitMinutes: u.managementBandALowerOorWaitMinutes ?? 45,
         pumpedHarvestMinPnlPct: u.managementBandAPumpedHarvestMinPnlPct ?? 2.0,
       },
       bandB: {
@@ -245,12 +246,14 @@ export const config = {
         trailingTriggerPct: u.managementBandBTrailingTriggerPct ?? 2.5,
         trailingDropPct: u.managementBandBTrailingDropPct ?? 1.25,
         upperOorWaitMinutes: u.managementBandBUpperOorWaitMinutes ?? 5,
+        lowerOorWaitMinutes: u.managementBandBLowerOorWaitMinutes ?? 30,
         pumpedHarvestMinPnlPct: u.managementBandBPumpedHarvestMinPnlPct ?? 1.5,
       },
       bandC: {
         trailingTriggerPct: u.managementBandCTrailingTriggerPct ?? 1.75,
         trailingDropPct: u.managementBandCTrailingDropPct ?? 0.85,
         upperOorWaitMinutes: u.managementBandCUpperOorWaitMinutes ?? 2,
+        lowerOorWaitMinutes: u.managementBandCLowerOorWaitMinutes ?? 15,
         pumpedHarvestMinPnlPct: u.managementBandCPumpedHarvestMinPnlPct ?? 1.0,
       },
       fallback: u.managementBandFallback ?? "B",

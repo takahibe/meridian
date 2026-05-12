@@ -1655,17 +1655,24 @@ function getDeterministicCloseRule(position, managementConfig) {
     };
   }
   // Rule 4-below — OOR below lower bin. For bid_ask within fill grace, this is the strategy paying off
-  // (price dumped through your range = you've fully filled). Skip auto-close. Use config value
-  // outOfRangeWaitMinutesLower (was hard-coded to 5).
+  // (price dumped through your range = you've fully filled). Skip auto-close. Use per-band config
+  // lowerOorWaitMinutes (GAP-A: band-adjusted, C=15/B=30/A=45), falling back to flat config.
   if (
     !inManualGrace &&
     !inBidAskFillGrace &&
     position.active_bin != null &&
     position.lower_bin != null &&
     position.active_bin < position.lower_bin &&
-    (position.minutes_out_of_range ?? 0) >= (managementConfig.outOfRangeWaitMinutesLower ?? managementConfig.outOfRangeWaitMinutes ?? 20)
+    (position.minutes_out_of_range ?? 0) >= (bandConfig.lowerOorWaitMinutes ?? managementConfig.outOfRangeWaitMinutesLower ?? managementConfig.outOfRangeWaitMinutes ?? 20)
   ) {
-    return { action: "CLOSE", rule: 4, reason: "OOR below lower bin — dumped" };
+    const waitLimit = bandConfig.lowerOorWaitMinutes ?? managementConfig.outOfRangeWaitMinutesLower ?? managementConfig.outOfRangeWaitMinutes ?? 20;
+    return {
+      action: "CLOSE",
+      rule: 4,
+      reason: `Lower OOR close (Band ${band}): out of range for ${position.minutes_out_of_range ?? 0}m (limit: ${waitLimit}m)`,
+      classification: "lower_oor_forced",
+      management_band: band,
+    };
   }
   // Rule 4-above — OOR above upper bin
   if (
@@ -1684,6 +1691,40 @@ function getDeterministicCloseRule(position, managementConfig) {
       management_band: band,
     };
   }
+  // Rule 4c — Fee-decay fragility signal (GAP-C).
+  // Fragility is computed once at screening time with static deploy-time values.
+  // Volume/fees can dry up after deploy. Compare current fee/TVL vs deploy-time;
+  // if decayed >50%, the pool's economic engine has stalled — close proactively.
+  // Only applies after minAgeBeforeYieldCheck to avoid false positives on new positions.
+  if (
+    !inManualGrace &&
+    ageMinutes >= (managementConfig.minAgeBeforeYieldCheck ?? 60)
+  ) {
+    const deployFeeTvl = tracked?.fee_tvl_ratio ?? tracked?.initial_fee_tvl_24h ?? null;
+    const currentFeeTvl = position.fee_per_tvl_24h ?? null;
+    if (deployFeeTvl != null && deployFeeTvl > 0 && currentFeeTvl != null) {
+      const decayPct = ((deployFeeTvl - currentFeeTvl) / deployFeeTvl) * 100;
+      if (decayPct >= 50) {
+        // Confirm with snapshots: only close if fees are truly stagnant (no meaningful growth)
+        const decaySnaps = position.snapshots || [];
+        const feesStagnant = decaySnaps.length < 3 || (() => {
+          const recent = decaySnaps.slice(-3);
+          const feeGrowth = (recent[recent.length - 1].unclaimed_fees_usd ?? 0) - (recent[0].unclaimed_fees_usd ?? 0);
+          return feeGrowth < 0.10;
+        })();
+        if (feesStagnant) {
+          return {
+            action: "CLOSE",
+            rule: 4.3,
+            reason: `Fee-decay fragility (Band ${band}): fee/TVL decayed ${decayPct.toFixed(0)}% (deploy: ${deployFeeTvl.toFixed(2)}% → current: ${currentFeeTvl.toFixed(2)}%)`,
+            classification: "fee_decay_fragility",
+            management_band: band,
+          };
+        }
+      }
+    }
+  }
+  // Rule 5 — Low yield (only after position has had time to accumulate fees)
   if (
     !inManualGrace &&
     position.fee_per_tvl_24h != null &&
