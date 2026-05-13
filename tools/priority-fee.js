@@ -119,12 +119,28 @@ export async function buildComputeBudgetIx(connection, operation, cuLimit) {
  */
 export function prependComputeBudget(tx, budgetIx) {
   const wrapped = new Transaction();
+
+  // Meteora's DLMM SDK already prepends a ComputeBudget setComputeUnitLimit
+  // instruction to initialize/add-liquidity transactions. Solana rejects
+  // duplicate compute-budget instructions with:
+  // "Transaction contains a duplicate instruction (2) that is not allowed".
+  // Strip SDK/user-supplied compute-budget instructions, then add exactly one
+  // Meridian-controlled budget pair (limit + priority fee) at the front.
+  const originalInstructions = tx.instructions || [];
+  const nonBudgetInstructions = originalInstructions.filter(
+    (ix) => !ix.programId?.equals?.(ComputeBudgetProgram.programId),
+  );
+  const stripped = originalInstructions.length - nonBudgetInstructions.length;
+  if (stripped > 0) {
+    log("priority_fee", `stripped ${stripped} existing compute-budget ix before wrapping transaction`);
+  }
+
   // Add compute budget instructions first
   for (const ix of budgetIx) {
     wrapped.add(ix);
   }
-  // Copy original instructions
-  for (const ix of tx.instructions) {
+  // Copy original non-budget instructions
+  for (const ix of nonBudgetInstructions) {
     wrapped.add(ix);
   }
   // Preserve fee payer and recent blockhash if set
