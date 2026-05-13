@@ -349,10 +349,9 @@ async function pickBestPool(pools) {
   const scored = pools.map((pool, i) => {
     const d = details[i];
     const activeTvl = num(d?.active_tvl ?? pool.active_tvl ?? pool.tvl ?? pool.liquidity);
-    // Use the API-provided fee_active_tvl_ratio directly (already a percentage, e.g. 7.95 = 7.95%)
-    const feeActiveTvlRatio = Number(d?.fee_active_tvl_ratio) > 0
+    const feeActiveTvlRatio = Number.isFinite(Number(d?.fee_active_tvl_ratio))
       ? Number(d.fee_active_tvl_ratio)
-      : (activeTvl > 0 ? (num(d?.fee) / activeTvl) * 100 : 0);
+      : 0;
     return { pool, detail: d, feeActiveTvlRatio, activeTvl };
   });
   scored.sort((a, b) => b.feeActiveTvlRatio - a.feeActiveTvlRatio || b.activeTvl - a.activeTvl);
@@ -363,11 +362,11 @@ function condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAn
   const poolAddress = pool.address || pool.pool_address;
   // Stage 5 Pool Discovery provides active_tvl and fee_active_tvl_ratio
   // Stage 3 Meteora search provides tvl and bin_step/base_fee_pct via pool_config
-  const activeTvl = num(poolDetail?.active_tvl ?? pool.tvl ?? pool.liquidity);
-  // Use API-provided ratio directly; fee_active_tvl_ratio from Pool Discovery is already computed
-  const feeActiveTvlRatio = Number(poolDetail?.fee_active_tvl_ratio) > 0
+  const tvl = num(poolDetail?.tvl ?? pool.tvl ?? pool.liquidity);
+  const activeTvl = num(poolDetail?.active_tvl ?? pool.active_tvl ?? tvl);
+  const feeActiveTvlRatio = Number.isFinite(Number(poolDetail?.fee_active_tvl_ratio))
     ? Number(Number(poolDetail.fee_active_tvl_ratio).toFixed(4))
-    : 0;
+    : null;
   const kolCount = holdersAnalysis.kolHolding || num(token.renowned_count) || num(info?.wallet_tags_stat?.renowned_wallets);
   const smartCount = holdersAnalysis.smartHolding + holdersAnalysis.smartAccumulating || num(token.smart_degen_count) || num(info?.wallet_tags_stat?.smart_wallets);
   const gmgnScore =
@@ -377,7 +376,7 @@ function condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAn
     num(holdersAnalysis?.preferredKolHolding) * 75 -
     num(holdersAnalysis?.dumpKolSignificantCount) * 100 -
     num(holdersAnalysis?.dumpKolMinorCount) * 20 +
-    feeActiveTvlRatio * 1000 +
+    num(feeActiveTvlRatio) * 1000 +
     Math.max(0, 100 - num(security?.rug_ratio) * 100) * 5;
 
   // Synthetic organic score from GMGN security signals (0-100)
@@ -408,6 +407,7 @@ function condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAn
     bin_step: pool.pool_config?.bin_step ?? poolDetail?.dlmm_params?.bin_step ?? null,
     fee_pct: pool.pool_config?.base_fee_pct ?? poolDetail?.fee_pct ?? null,
     // Stage 5 Pool Discovery: active_tvl, fee_active_tvl_ratio, volatility
+    tvl: round(tvl),
     active_tvl: round(activeTvl),
     fee_active_tvl_ratio: feeActiveTvlRatio,
     volatility: poolDetail?.volatility != null ? Number(Number(poolDetail.volatility).toFixed(4)) : null,
@@ -724,9 +724,10 @@ export function formatGmgnCandidateForPrompt(p) {
   const mcap = p.mcap != null ? `mcap=$${(p.mcap / 1000).toFixed(0)}k` : "";
   const binStep = p.bin_step != null ? `bin_step=${p.bin_step}` : "";
 
-  const tvl = p.active_tvl != null ? `tvl=$${(p.active_tvl / 1000).toFixed(1)}k` : "";
+  const tvl = p.tvl != null ? `tvl=$${(p.tvl / 1000).toFixed(1)}k` : p.active_tvl != null ? `tvl=$${(p.active_tvl / 1000).toFixed(1)}k` : "";
   const feeTvl = p.fee_active_tvl_ratio != null ? `fee/tvl=${p.fee_active_tvl_ratio}%` : "";
   const vol = p.volume_window != null ? `vol=$${(p.volume_window / 1000).toFixed(1)}k` : "";
+  const volatility = Number.isFinite(Number(p.volatility)) && Number(p.volatility) > 0 ? `volatility=${p.volatility}` : "volatility=unknown";
   const ath = p.price_vs_ath_pct != null ? `price_vs_ath=${p.price_vs_ath_pct.toFixed(0)}%` : "";
 
   const top10 = p.gmgn_token_info_top10_pct != null ? `top10=${p.gmgn_token_info_top10_pct}%` : (p.gmgn_top10_holder_pct != null ? `top10=${p.gmgn_top10_holder_pct}%` : "");
@@ -771,7 +772,7 @@ export function formatGmgnCandidateForPrompt(p) {
   }
 
   const header = [sym, launchpad, age, mcap, binStep].filter(Boolean).join(" | ");
-  const pool = [tvl, feeTvl, vol, ath].filter(Boolean).join(" | ");
+  const pool = [tvl, feeTvl, vol, volatility, ath].filter(Boolean).join(" | ");
   const risk = [top10, dev, bot, fresh, bundler].filter(Boolean).join(" | ");
   const traction = [holders, fees, smart, kol].filter(Boolean).join(" | ");
 
