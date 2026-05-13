@@ -21,6 +21,9 @@ strategy-library.json
 decision-log.json
 hivemind-cache.json
 signal-weights.json
+price-history.json
+x-narrative-cache.json
+checkpoints/
 
 # Logs
 logs/
