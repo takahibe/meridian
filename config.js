@@ -213,6 +213,28 @@ export const config = {
     takeProfitPct:         u.takeProfitPct         ?? u.takeProfitFeePct ?? 5,
     minFeePerTvl24h:       u.minFeePerTvl24h       ?? 7,
     minAgeBeforeYieldCheck: u.minAgeBeforeYieldCheck ?? 60, // minutes before low yield can trigger close
+    // Fee-decay: band-aware thresholds for earlier, smarter fragility closes
+    feeDecayWarnPct:              u.feeDecayWarnPct              ?? 35,
+    feeDecayClosePctBandA:        u.feeDecayClosePctBandA        ?? 65,
+    feeDecayClosePctBandB:        u.feeDecayClosePctBandB        ?? 50,
+    feeDecayClosePctBandC:        u.feeDecayClosePctBandC        ?? 45,
+    feeDecayImmediatePct:         u.feeDecayImmediatePct         ?? 70,
+    feeDecayMinAgeMinutes:        u.feeDecayMinAgeMinutes        ?? 45,
+    feeDecayMinAgeMinutesBandA:   u.feeDecayMinAgeMinutesBandA   ?? 60,
+    feeDecayMinAgeMinutesBandB:   u.feeDecayMinAgeMinutesBandB   ?? 45,
+    feeDecayMinAgeMinutesBandC:   u.feeDecayMinAgeMinutesBandC   ?? 30,
+    feeDecayStagnantFeeGrowthUsd: u.feeDecayStagnantFeeGrowthUsd ?? 0.10,
+    // Lower-dump velocity guard: catch RoyalPop-style fast drops before SL
+    lowerDumpVelocityEnabled:      u.lowerDumpVelocityEnabled      ?? true,
+    lowerDumpBinVelocityClose:     u.lowerDumpBinVelocityClose     ?? 20,
+    lowerDumpBinVelocityEmergency: u.lowerDumpBinVelocityEmergency ?? 30,
+    lowerDumpPnlClosePct:          u.lowerDumpPnlClosePct          ?? -5,
+    lowerDumpLookbackSnapshots:    u.lowerDumpLookbackSnapshots    ?? 3,
+    // Upper-OOR fee-aware extension (Phase 2)
+    upperOorFeeAwareEnabled:      u.upperOorFeeAwareEnabled      ?? true,
+    upperOorFeeGrowthMinUsd:      u.upperOorFeeGrowthMinUsd      ?? 0.10,
+    upperOorFeeExtendMinutes:     u.upperOorFeeExtendMinutes     ?? 5,
+    upperOorFeeMaxExtensions:     u.upperOorFeeMaxExtensions     ?? 1,
     tokenCooldownAfterLosses: u.tokenCooldownAfterLosses ?? 3,  // cross-pool losses before global token cooldown
     tokenGlobalCooldownHours: u.tokenGlobalCooldownHours ?? 24, // hours for global token cooldown
     // Spot-add strategy: add a spot position to confirmed bid_ask pools

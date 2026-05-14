@@ -10,6 +10,7 @@
 
 import fs from "fs";
 import { log } from "./logger.js";
+import { computeFeeDecayClose, computeLowerDumpVelocityClose, computeUpperOorFeeExtension } from "./management-rules.js";
 
 function resolveManagementBand(volatility, managementBands = {}) {
   const fallback = String(managementBands.fallback || "B").toUpperCase();
@@ -330,6 +331,21 @@ export function trackPosition({
   });
   const bandConfig = applyFragilityToBand(getBandConfig(managementBand, management_config?.managementBands), fragility);
 
+  // Extract fallback values from signal_snapshot when direct args are null
+  const snap = signal_snapshot || {};
+  const effective_fee_tvl_ratio = fee_tvl_ratio
+    ?? snap.fee_active_tvl_ratio
+    ?? snap.fee_tvl_ratio
+    ?? null;
+  const effective_organic_score = organic_score ?? snap.organic_score ?? null;
+  const effective_mcap = mcap ?? snap.mcap ?? null;
+  const effective_token_age_hours = token_age_hours ?? snap.token_age_hours ?? null;
+  const effective_smart_wallet_count = snap.smart_wallet_count ?? null;
+  const effective_narrative_confidence = snap.narrative_confidence ?? null;
+  const effective_x_unavailable_reason = snap.x_unavailable_reason ?? null;
+  const effective_active_tvl = snap.active_tvl ?? null;
+  const effective_volume = snap.volume ?? null;
+
   state.positions[position] = {
     position,
     pool,
@@ -343,12 +359,12 @@ export function trackPosition({
     volatility,
     management_band: managementBand,
     management_band_config: bandConfig,
-    fee_tvl_ratio,
-    initial_fee_tvl_24h: fee_tvl_ratio,
-    organic_score,
+    fee_tvl_ratio: effective_fee_tvl_ratio,
+    initial_fee_tvl_24h: effective_fee_tvl_ratio,
+    organic_score: effective_organic_score,
     initial_value_usd,
-    mcap,
-    token_age_hours,
+    mcap: effective_mcap,
+    token_age_hours: effective_token_age_hours,
     top10_pct,
     bot_holders_pct,
     bundler_pct,
@@ -383,6 +399,18 @@ export function trackPosition({
     trailing_active: false,
     lower_bounce_touched_at: null,
     lower_bounce_touch_bin: null,
+    // New fields from signal_snapshot
+    smart_wallet_count: effective_smart_wallet_count,
+    narrative_confidence: effective_narrative_confidence,
+    x_unavailable_reason: effective_x_unavailable_reason,
+    active_tvl_at_deploy: effective_active_tvl,
+    volume_at_deploy: effective_volume,
+    // Persist funnel reasons as thesis
+    deploy_thesis_reasons: snap.funnel_reasons ?? [],
+    deploy_thesis_risks: snap.funnel_risks ?? [],
+    // Per-position snapshots for velocity/fee-decay rules
+    snapshots: [],
+    upper_oor_fee_extensions: 0,
   };
   pushEvent(state, { action: "deploy", position, pool_name: pool_name || pool, management_band: managementBand });
   save(state);
@@ -742,6 +770,19 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
   const pos = state.positions[position_address];
   if (!pos || pos.closed) return null;
 
+  // Accumulate per-position snapshot for velocity/fee-decay rules
+  if (!pos.snapshots) pos.snapshots = [];
+  pos.snapshots.push({
+    ts: new Date().toISOString(),
+    active_bin: active_bin,
+    pnl_pct: currentPnlPct,
+    unclaimed_fees_usd: positionData.unclaimed_fees_usd ?? null,
+    fee_per_tvl_24h: fee_per_tvl_24h ?? null,
+  });
+  // Keep last 12 snapshots (~1h at 5min intervals)
+  if (pos.snapshots.length > 12) pos.snapshots = pos.snapshots.slice(-12);
+  save(state);
+
   if (pos.confirmed_trailing_exit_until) {
     if (new Date(pos.confirmed_trailing_exit_until).getTime() > Date.now() && pos.confirmed_trailing_exit_reason) {
       const reason = pos.confirmed_trailing_exit_reason;
@@ -817,6 +858,24 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
   }
 
   if (changed) save(state);
+
+  // ── Lower dump velocity guard (before stop loss) ──────────────
+  const velocityResult = computeLowerDumpVelocityClose({
+    strategy: pos.strategy,
+    managementBand,
+    mgmtConfig,
+    activeBin: active_bin,
+    lowerBin: lower_bin,
+    oorDirection: pos.out_of_range_direction,
+    currentPnlPct,
+    snapshots: pos.snapshots,
+  });
+  if (velocityResult?.action === "EMERGENCY_CLOSE") {
+    return { action: "EMERGENCY_CLOSE", reason: velocityResult.reason, emergency: true };
+  }
+  if (velocityResult?.action === "LOWER_DUMP_VELOCITY") {
+    return { action: "LOWER_DUMP_VELOCITY", reason: velocityResult.reason, management_band: managementBand };
+  }
 
   // ── Stop loss (per-strategy threshold) ────────────────────────
   // bid_ask is "buy the dip" — drawdown during fill is expected. Use a wider SL.
@@ -927,22 +986,19 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
   // ── Fee-decay fragility signal (GAP-C) ────────────────────────
   // Compare current fee/TVL vs deploy-time; if decayed >50%, pool engine stalled.
   const { age_minutes } = positionData;
-  const minAgeForYieldCheck = mgmtConfig.minAgeBeforeYieldCheck ?? 60;
-  if (!inManualGrace && (age_minutes ?? 0) >= minAgeForYieldCheck) {
-    const deployFeeTvl = pos.fee_tvl_ratio ?? pos.initial_fee_tvl_24h ?? null;
-    const currentFeeTvl = fee_per_tvl_24h ?? null;
-    if (deployFeeTvl != null && deployFeeTvl > 0 && currentFeeTvl != null) {
-      const decayPct = ((deployFeeTvl - currentFeeTvl) / deployFeeTvl) * 100;
-      if (decayPct >= 50) {
-        return {
-          action: "FEE_DECAY",
-          reason: `Fee-decay fragility: fee/TVL decayed ${decayPct.toFixed(0)}% (deploy: ${deployFeeTvl.toFixed(2)}% → current: ${currentFeeTvl.toFixed(2)}%)`,
-        };
-      }
-    }
-  }
+  const feeDecayResult = computeFeeDecayClose({
+    managementBand,
+    mgmtConfig,
+    ageMinutes: age_minutes,
+    deployFeeTvl: pos.fee_tvl_ratio ?? pos.initial_fee_tvl_24h ?? null,
+    currentFeeTvl: fee_per_tvl_24h ?? null,
+    snapshots: pos.snapshots,
+    inManualGrace,
+  });
+  if (feeDecayResult?.action === "FEE_DECAY") return feeDecayResult;
+  if (feeDecayResult?.skip) log("state", `Position ${position_address} fee-decay skipped: ${feeDecayResult.reason}`);
 
-  // ── Low yield (only after position has had time to accumulate fees) ───
+  // ── Low yield (only after position has had time to accumulate fees) ─────
   if (
     !inManualGrace &&
     fee_per_tvl_24h != null &&

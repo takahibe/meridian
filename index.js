@@ -40,6 +40,7 @@ import { getWeightsSummary } from "./signal-weights.js";
 import { bootstrapHiveMind, ensureAgentId, getHiveMindPullMode, isHiveMindEnabled, pullHiveMindLessons, pullHiveMindPresets, registerHiveMindAgent, startHiveMindBackgroundSync } from "./hivemind.js";
 import { appendDecision } from "./decision-log.js";
 import { runWeeklySourceCheck } from "./scripts/weekly-source-check.js";
+import { computeFeeDecayClose, computeLowerDumpVelocityClose } from "./management-rules.js";
 
 log("startup", "DLMM LP Agent starting...");
 log("startup", `Mode: ${process.env.DRY_RUN === "true" ? "DRY RUN" : "LIVE"}`);
@@ -1633,6 +1634,24 @@ function getDeterministicCloseRule(position, managementConfig) {
   // Rules 1-5 skipped entirely when user has /hold'd this position.
   if (autoCloseDisabled) return null;
 
+  // Rule 0.5 — Lower dump velocity guard (catches RoyalPop-style fast drops before SL)
+  const velocityResult = computeLowerDumpVelocityClose({
+    strategy,
+    managementBand: band,
+    mgmtConfig: managementConfig,
+    activeBin: position.active_bin,
+    lowerBin: position.lower_bin,
+    oorDirection: position.active_bin < position.lower_bin ? "lower" : null,
+    currentPnlPct: position.pnl_pct,
+    snapshots: tracked?.snapshots || [],
+  });
+  if (velocityResult?.action === "EMERGENCY_CLOSE") {
+    return { action: "CLOSE", rule: 0.5, reason: velocityResult.reason, emergency: true, management_band: band };
+  }
+  if (velocityResult?.action === "LOWER_DUMP_VELOCITY") {
+    return { action: "CLOSE", rule: 0.5, reason: velocityResult.reason, classification: "lower_dump_velocity", management_band: band };
+  }
+
   // Rule 1 — stop loss. Per-strategy: bid_ask gets a wider threshold because mark-to-market drawdown
   // during the fill phase is expected. Also skipped during manual grace (user is in control).
   const effectiveSlPct = strategy === "bid_ask"
@@ -1716,39 +1735,20 @@ function getDeterministicCloseRule(position, managementConfig) {
       management_band: band,
     };
   }
-  // Rule 4c — Fee-decay fragility signal (GAP-C).
-  // Fragility is computed once at screening time with static deploy-time values.
-  // Volume/fees can dry up after deploy. Compare current fee/TVL vs deploy-time;
-  // if decayed >50%, the pool's economic engine has stalled — close proactively.
-  // Only applies after minAgeBeforeYieldCheck to avoid false positives on new positions.
-  if (
-    !inManualGrace &&
-    ageMinutes >= (managementConfig.minAgeBeforeYieldCheck ?? 60)
-  ) {
-    const deployFeeTvl = tracked?.fee_tvl_ratio ?? tracked?.initial_fee_tvl_24h ?? null;
-    const currentFeeTvl = position.fee_per_tvl_24h ?? null;
-    if (deployFeeTvl != null && deployFeeTvl > 0 && currentFeeTvl != null) {
-      const decayPct = ((deployFeeTvl - currentFeeTvl) / deployFeeTvl) * 100;
-      if (decayPct >= 50) {
-        // Confirm with snapshots: only close if fees are truly stagnant (no meaningful growth)
-        const decaySnaps = position.snapshots || [];
-        const feesStagnant = decaySnaps.length < 3 || (() => {
-          const recent = decaySnaps.slice(-3);
-          const feeGrowth = (recent[recent.length - 1].unclaimed_fees_usd ?? 0) - (recent[0].unclaimed_fees_usd ?? 0);
-          return feeGrowth < 0.10;
-        })();
-        if (feesStagnant) {
-          return {
-            action: "CLOSE",
-            rule: 4.3,
-            reason: `Fee-decay fragility (Band ${band}): fee/TVL decayed ${decayPct.toFixed(0)}% (deploy: ${deployFeeTvl.toFixed(2)}% → current: ${currentFeeTvl.toFixed(2)}%)`,
-            classification: "fee_decay_fragility",
-            management_band: band,
-          };
-        }
-      }
-    }
+  // Rule 4c — Fee-decay fragility signal (GAP-C) via shared helper.
+  const feeDecayResult = computeFeeDecayClose({
+    managementBand: band,
+    mgmtConfig: managementConfig,
+    ageMinutes,
+    deployFeeTvl: tracked?.fee_tvl_ratio ?? tracked?.initial_fee_tvl_24h ?? null,
+    currentFeeTvl: position.fee_per_tvl_24h ?? null,
+    snapshots: tracked?.snapshots || [],
+    inManualGrace,
+  });
+  if (feeDecayResult?.action === "FEE_DECAY") {
+    return { ...feeDecayResult, rule: 4.3, classification: "fee_decay_fragility", management_band: band };
   }
+
   // Rule 5 — Low yield (only after position has had time to accumulate fees)
   if (
     !inManualGrace &&
