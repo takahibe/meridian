@@ -30,7 +30,7 @@ import {
 import { generateBriefing } from "./briefing.js";
 import { getLastBriefingDate, setLastBriefingDate, getTrackedPosition, setPositionInstruction, updatePnlAndCheckExits, queuePeakConfirmation, resolvePendingPeak, queueTrailingDropConfirmation, resolvePendingTrailingDrop, markSpotAdded, hasSpotBeenAdded, clearSpotAdd } from "./state.js";
 import { getActiveStrategy } from "./strategy-library.js";
-import { recordPositionSnapshot, recallForPool, addPoolNote, getRecentSnapshots } from "./pool-memory.js";
+import { recordPositionSnapshot, recallForPool, addPoolNote, getRecentSnapshots, getTokenLossCount } from "./pool-memory.js";
 import { checkSmartWalletsOnPool } from "./smart-wallets.js";
 import { getTokenNarrative, getTokenInfo } from "./tools/token.js";
 import { getXNarrativeSignal } from "./tools/x-narrative.js";
@@ -772,9 +772,27 @@ export async function runScreeningCycle({ silent = false } = {}) {
       pool.entry_fragility_score = fragility.score;
       pool.entry_fragility_level = fragility.level;
       pool.entry_fragility_reasons = fragility.reasons;
-      const recommendedBinsBelow = computeBinsBelow(pool.volatility, fragility);
+      let recommendedBinsBelow = computeBinsBelow(pool.volatility, fragility);
+      const supportCoverage = estimateBinsToSupport(pool);
+      if (supportCoverage) {
+        const supportBufferBins = Number(config.strategy.supportBufferBins ?? 3);
+        const neededBins = supportCoverage.bins + supportBufferBins;
+        const maxSupportBins = Number(config.strategy.maxBinsBelow ?? 69);
+        pool.support_bins_below = supportCoverage.bins;
+        pool.support_price = supportCoverage.supportPrice;
+        pool.support_source = supportCoverage.source;
+        if (neededBins > maxSupportBins) {
+          log("screening", `Support gate: dropped ${pool.name} — ${supportCoverage.source} support needs ${neededBins} bins below active, max ${maxSupportBins}; entry too early / support too far`);
+          filteredOut.push({ name: pool.name, reason: `${supportCoverage.source} support needs ${neededBins} bins > max ${maxSupportBins}` });
+          return false;
+        }
+        if (neededBins > recommendedBinsBelow) {
+          log("screening", `Support range widened ${pool.name}: bins_below ${recommendedBinsBelow} → ${neededBins} to cover ${supportCoverage.source} support (${supportCoverage.interval || "?"})`);
+          recommendedBinsBelow = neededBins;
+        }
+      }
       pool.recommended_bins_below = recommendedBinsBelow;
-      setRecommendedBins(pool.pool, { bins: recommendedBinsBelow, fragility, volatility: pool.volatility });
+      setRecommendedBins(pool.pool, { bins: recommendedBinsBelow, fragility, volatility: pool.volatility, support: supportCoverage });
 
       const vol = pool.volatility;
       const maxVolHard = Number(config.screening.maxVolatilityHard ?? 3.5);
@@ -1070,11 +1088,18 @@ export async function runScreeningCycle({ silent = false } = {}) {
             fragility_level: pool.entry_fragility_level,
             lpagent_confidence: pool.lpagent_confidence,
             discord_active: Boolean(pool.discord_signal),
+            organic_score: pool.organic_score,
+            smart_wallet_count: sw?.in_pool?.length ?? 0,
+            base_mint: pool.base?.mint || pool.base_mint || null,
+            token_loss_count: getTokenLossCount(pool.base?.mint || pool.base_mint),
           }, {
             narrative_confidence: x?.narrative_confidence,
             shill_burst_flag: x?.shill_burst_flag,
             x_unavailable_reason: x?.reason,
             lpagent_confidence: pool.lpagent_confidence,
+            organic_score: pool.organic_score,
+            smart_wallet_count: sw?.in_pool?.length ?? 0,
+            token_loss_count: getTokenLossCount(pool.base?.mint || pool.base_mint),
           }, config.screening)
         : { band: pool.discord_signal ? "A" : "B", reasons: ["funnel disabled"], risks: [] };
 
@@ -1208,7 +1233,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
           `  deploy_args: band=${banding.band}, amount_y<=${deployAmount}, bins_above=0`,
           formatGmgnCandidateForPrompt(pool),
           funnelLine,
-          `  fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"}), recommended_bins_below=${pool.recommended_bins_below ?? "?"}`,
+          `  fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"}), recommended_bins_below=${pool.recommended_bins_below ?? "?"}${pool.support_bins_below != null ? `, support_bins=${pool.support_bins_below} (${pool.support_source || "support"})` : ""}`,
           pvpLine,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
           lpSignalLine,
@@ -1223,7 +1248,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
         block = [
           `POOL: ${pool.name} (${pool.pool})`,
           `  deploy_args: band=${banding.band}, amount_y<=${deployAmount}, bins_above=0`,
-`  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.active_tvl}, volatility=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}, fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"})${pool.entry_fragility_reasons?.length ? ` [${pool.entry_fragility_reasons.slice(0,2).join(";")}]` : ""}`,
+`  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.active_tvl}, volatility=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}, fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"})${pool.support_bins_below != null ? `, support_bins=${pool.support_bins_below}(${pool.support_source || "support"})` : ""}${pool.entry_fragility_reasons?.length ? ` [${pool.entry_fragility_reasons.slice(0,2).join(";")}]` : ""}`,
           `  audit: top10=${top10Pct}%, bots=${botPct}%, fees=${feesSol}SOL${launchpad ? `, launchpad=${launchpad}` : ""}`,
           funnelLine,
           gmgnPriceLine,
@@ -1830,6 +1855,30 @@ function buildGmgnFunnelReport(stageCounts, allFiltered = [], { fromStage = 1 } 
     .map((key) => `${stageLabels[key] || key}:\n${byStage[key].map(r => `  • ${r}`).join("\n")}`)
     .join("\n");
   return details ? `${funnel}\n\n${details}` : funnel;
+}
+
+function estimateBinsToSupport(pool = {}) {
+  const binStep = Number(pool.bin_step ?? pool.dlmm_bin_step ?? pool.binStep);
+  const activePrice = Number(pool.price ?? pool.pool_price);
+  if (!Number.isFinite(binStep) || binStep <= 0 || !Number.isFinite(activePrice) || activePrice <= 0) return null;
+
+  const intervals = pool.indicator_confirmation?.intervals || [];
+  const m15 = intervals.find((entry) => entry?.interval === "15_MINUTE") || intervals[0];
+  const signal = m15?.signal || m15?.latest?.signal || null;
+  const supportPrice = Number(signal?.supertrendValue ?? signal?.lowerBand ?? signal?.fib618 ?? signal?.fib50);
+  if (!Number.isFinite(supportPrice) || supportPrice <= 0 || supportPrice >= activePrice) return null;
+
+  const stepRatio = 1 + binStep / 10000;
+  if (stepRatio <= 1) return null;
+  const bins = Math.ceil(Math.log(activePrice / supportPrice) / Math.log(stepRatio));
+  if (!Number.isFinite(bins) || bins < 0) return null;
+  return {
+    bins,
+    supportPrice,
+    activePrice,
+    interval: m15?.interval || null,
+    source: signal?.supertrendValue != null ? "supertrend" : signal?.lowerBand != null ? "lower_band" : signal?.fib618 != null ? "fib618" : "fib50",
+  };
 }
 
 function computeCandidateFragility(pool = {}, ti = null) {

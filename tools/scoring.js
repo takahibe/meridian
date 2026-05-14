@@ -31,6 +31,9 @@ export function assignBand(candidate = {}, signals = {}, cfg = {}) {
   const fragilityLevel = String(candidate.fragility_level || candidate.entry_fragility_level || "normal").toLowerCase();
   const lpagentConfidence = String(candidate.lpagent_confidence || signals.lpagent_confidence || "").toLowerCase();
   const discordActive = Boolean(candidate.discord_active ?? candidate.discord_signal);
+  const organicScore = Number(candidate.organic_score ?? signals.organic_score);
+  const smartWalletCount = Number(candidate.smart_wallet_count ?? signals.smart_wallet_count ?? 0);
+  const tokenLossCount = Number(candidate.token_loss_count ?? signals.token_loss_count ?? 0);
 
   // ── Standalone hard gate: minimum token age ──
   const ageHours = Number(candidate.token_age_hours);
@@ -42,6 +45,47 @@ export function assignBand(candidate = {}, signals = {}, cfg = {}) {
       reasons: [`age ${ageHours}h < minimum ${minAge}h`],
       risks: ["token too young — high dump probability"],
     };
+  }
+
+  // ── Quality-first trap gate ─────────────────────────────────────────────
+  // Fees can be bait. A high-fee pool with weak organic flow, no smart-wallet
+  // support, fast fragility, and unavailable X narrative is usually exit
+  // liquidity, not LP yield. Reject this combo before fee metrics can rescue it.
+  const weakOrganicThreshold = Number(cfg.qualityTrapMaxOrganic ?? 30);
+  const weakOrganic = Number.isFinite(organicScore) && organicScore < weakOrganicThreshold;
+  const noSmartWallets = !Number.isFinite(smartWalletCount) || smartWalletCount <= 0;
+  const noDiscordEscalation = !discordActive;
+  if (weakOrganic && noSmartWallets && noDiscordEscalation && fragilityLevel === "fast" && xFailOpenApplies) {
+    return {
+      band: "REJECT",
+      stage: "token_quality",
+      reasons: [
+        `quality trap: organic ${organicScore} < ${weakOrganicThreshold}`,
+        "no smart-wallet support",
+        "fragility fast",
+        `x unavailable (${xUnavailableReason || "unknown X failure"})`,
+      ],
+      risks: ["high-fee trap risk — fees cannot override weak token quality"],
+    };
+  }
+
+  // Soft base-mint memory penalty before the hard global cooldown threshold.
+  // One prior loss is not an automatic ban, but weak-quality repeat mints do not
+  // get a clean slate just because they appear in a new pool.
+  if (Number.isFinite(tokenLossCount) && tokenLossCount > 0) {
+    if ((weakOrganic || fragilityLevel === "fast") && noSmartWallets && !discordActive) {
+      return {
+        band: "REJECT",
+        stage: "token_memory",
+        reasons: [
+          `base mint has ${tokenLossCount} prior loss(es)`,
+          weakOrganic ? `organic ${organicScore} < ${weakOrganicThreshold}` : `fragility ${fragilityLevel}`,
+          "no smart-wallet/discord override",
+        ],
+        risks: ["base-mint loss memory penalty — repeated weak token setup"],
+      };
+    }
+    risks.push(`base-mint memory: ${tokenLossCount} prior loss(es)`);
   }
 
   // ── Standalone hard gate: minimum fee/TVL ratio ──

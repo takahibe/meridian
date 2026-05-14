@@ -318,6 +318,17 @@ export function isTokenOnGlobalCooldown(baseMint) {
 }
 
 /**
+ * Returns recorded cross-pool loss count for a base mint.
+ * Used as a soft penalty before the global cooldown hard-block triggers.
+ */
+export function getTokenLossCount(baseMint) {
+  if (!baseMint) return 0;
+  const db = load();
+  const count = Number(db._token_loss_counts?.[baseMint] || 0);
+  return Number.isFinite(count) ? count : 0;
+}
+
+/**
  * Return the last N position snapshots for a pool (raw objects).
  * Used for trend-based yield checks.
  */

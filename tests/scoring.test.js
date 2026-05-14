@@ -128,3 +128,41 @@ test("fail-open X still loses to later pool quality gates", () => {
   assert.match(result.reasons.join(" "), /fail-open enabled/i);
   assert.match(result.reasons.join(" "), /active_tvl/i);
 });
+
+
+test("quality trap rejects weak organic fast-fragility fail-open candidate before fees can rescue it", () => {
+  const result = assignBand(passingCandidate({
+    fee_active_tvl_ratio: 2.5,
+    active_tvl: 50000,
+    organic_score: 16,
+    smart_wallet_count: 0,
+    fragility_level: "fast",
+    discord_active: false,
+  }), {
+    narrative_confidence: "unknown",
+    x_unavailable_reason: "http 402: CreditsDepleted",
+    shill_burst_flag: false,
+    smart_wallet_count: 0,
+  }, { ...cfg, xNarrativeFailOpenOnUnavailable: true });
+
+  assert.equal(result.band, "REJECT");
+  assert.equal(result.stage, "token_quality");
+  assert.match(result.risks.join(" "), /fees cannot override/i);
+});
+
+test("base-mint loss memory rejects repeat weak setup even in a new pool", () => {
+  const result = assignBand(passingCandidate({
+    organic_score: 25,
+    smart_wallet_count: 0,
+    token_loss_count: 1,
+    fragility_level: "normal",
+    discord_active: false,
+  }), {
+    narrative_confidence: "strong",
+    shill_burst_flag: false,
+  }, cfg);
+
+  assert.equal(result.band, "REJECT");
+  assert.equal(result.stage, "token_memory");
+  assert.match(result.reasons.join(" "), /prior loss/i);
+});

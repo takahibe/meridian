@@ -2,7 +2,7 @@ import { config } from "../config.js";
 import { isBlacklisted } from "../token-blacklist.js";
 import { isDevBlocked, getBlockedDevs } from "../dev-blocklist.js";
 import { log } from "../logger.js";
-import { isBaseMintOnCooldown, isPoolOnCooldown, recallForPool, isTokenOnGlobalCooldown } from "../pool-memory.js";
+import { isBaseMintOnCooldown, isPoolOnCooldown, recallForPool, isTokenOnGlobalCooldown, getTokenLossCount } from "../pool-memory.js";
 import { confirmIndicatorPreset } from "./chart-indicators.js";
 import { discoverGmgnPools } from "./gmgn.js";
 
@@ -54,16 +54,21 @@ function normalizeSymbol(symbol) {
 }
 
 function scoreCandidate(pool) {
+  const organic = Number(pool.organic_score || 0);
+  const holders = Number(pool.holders || 0);
+  const tokenLossCount = getTokenLossCount(pool.base?.mint || pool.base_mint);
+  const qualityScore = organic * 30 + Math.min(holders, 5000) / 5;
   let score;
   if (Number.isFinite(Number(pool.gmgn_score))) {
-    score = Number(pool.gmgn_score) + Number(pool.fee_active_tvl_ratio || 0) * 500;
+    // Quality first: GMGN rank remains useful, but fee/TVL is capped so high
+    // fees cannot dominate weak token quality. Fees are yield, not safety.
+    score = Number(pool.gmgn_score) + qualityScore + Math.min(Number(pool.fee_active_tvl_ratio || 0), 0.5) * 200;
   } else {
     const feeTvl = Number(pool.fee_active_tvl_ratio || 0);
-    const organic = Number(pool.organic_score || 0);
     const volume = Number(pool.volume_window || 0);
-    const holders = Number(pool.holders || 0);
-    score = feeTvl * 1000 + organic * 10 + volume / 100 + holders / 100;
+    score = qualityScore + Math.min(feeTvl, 0.5) * 200 + volume / 200;
   }
+  if (tokenLossCount > 0) score -= tokenLossCount * 3000;
   if (pool.source_overlap) score += 5000;
   else if (pool.source_type === "meteora") score += 500;
   else if (pool.source_type === "gmgn") score -= 250;
