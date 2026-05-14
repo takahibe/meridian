@@ -232,6 +232,14 @@ export const config = {
     trailingTakeProfit:    u.trailingTakeProfit    ?? true,
     trailingTriggerPct:    u.trailingTriggerPct    ?? 3,    // activate trailing at X% PnL
     trailingDropPct:       u.trailingDropPct       ?? 1.5,  // close when drops X% from peak
+    // Bid/ask bounce profit-lock: if price filled near the lower edge, then
+    // rebounds back through mid-range while PnL is green, harvest before a
+    // roundtrip. This approximates "lower BB -> middle BB with RSI>50" using
+    // DLMM bin structure; indicator confirmation can be layered later.
+    lowerBounceProfitLockEnabled: u.lowerBounceProfitLockEnabled ?? true,
+    lowerBounceTouchPct: u.lowerBounceTouchPct ?? 0.15,       // lower 15% of range = touched bottom
+    lowerBounceReboundPct: u.lowerBounceReboundPct ?? 0.50,   // middle of range = bounce confirmed
+    lowerBounceMinPnlPct: u.lowerBounceMinPnlPct ?? 2.5,      // don't scalp dust; lock real green
     managementBands: {
       bandA: {
         maxVolatility: 1.8,

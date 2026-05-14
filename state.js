@@ -381,6 +381,8 @@ export function trackPosition({
     confirmed_trailing_exit_reason: null,
     confirmed_trailing_exit_until: null,
     trailing_active: false,
+    lower_bounce_touched_at: null,
+    lower_bounce_touch_bin: null,
   };
   pushEvent(state, { action: "deploy", position, pool_name: pool_name || pool, management_band: managementBand });
   save(state);
@@ -852,6 +854,46 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
         management_band: managementBand,
         fragility_level: fragility.level,
         confirmation_delay_ms: bandConfig.fragilityConfirmationDelayMs ?? null,
+      };
+    }
+  }
+
+  // ── Bid/ask lower-bounce profit lock ───────────────────────────
+  // For bid_ask positions, touching the lower edge means the dip-buy fill has
+  // happened. If price then rebounds back to mid-range while PnL is already
+  // green, harvest before it roundtrips into a lower-OOR forced loss.
+  if (
+    mgmtConfig.lowerBounceProfitLockEnabled !== false &&
+    pos.strategy === "bid_ask" &&
+    in_range === true &&
+    Number.isFinite(active_bin) &&
+    Number.isFinite(lower_bin) &&
+    Number.isFinite(upper_bin) &&
+    upper_bin > lower_bin
+  ) {
+    const rangeProgress = (active_bin - lower_bin) / (upper_bin - lower_bin);
+    const touchPct = mgmtConfig.lowerBounceTouchPct ?? 0.15;
+    const reboundPct = mgmtConfig.lowerBounceReboundPct ?? 0.50;
+    const minPnl = mgmtConfig.lowerBounceMinPnlPct ?? 2.5;
+
+    if (rangeProgress <= touchPct && !pos.lower_bounce_touched_at) {
+      pos.lower_bounce_touched_at = new Date().toISOString();
+      pos.lower_bounce_touch_bin = active_bin;
+      save(state);
+      log("state", `Position ${position_address} lower-bounce touch recorded at bin ${active_bin} (${Math.round(rangeProgress * 100)}% through range)`);
+    }
+
+    if (
+      !pnl_pct_suspicious &&
+      pos.lower_bounce_touched_at &&
+      currentPnlPct != null &&
+      currentPnlPct >= minPnl &&
+      rangeProgress >= reboundPct
+    ) {
+      return {
+        action: "LOWER_BOUNCE_PROFIT_LOCK",
+        reason: `Lower-bounce profit lock: touched lower range at bin ${pos.lower_bounce_touch_bin ?? "?"}, rebounded to ${Math.round(rangeProgress * 100)}% of range with PnL ${currentPnlPct.toFixed(2)}% >= ${minPnl}%`,
+        management_band: managementBand,
       };
     }
   }

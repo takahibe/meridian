@@ -1316,7 +1316,12 @@ function deriveLpAgentPnlPct(lpData, solMode = false) {
 
   const currentValue = solMode ? safeNum(lpData.valueNative) : safeNum(lpData.value);
   const unclaimedFees = solMode ? safeNum(lpData.unCollectedFeeNative) : safeNum(lpData.unCollectedFee);
-  const pnl = currentValue + unclaimedFees - deposit;
+  // LPAgent's reported PnL includes already-claimed fees. The sanity check must
+  // include them too, otherwise every post-claim position looks falsely
+  // "suspicious" by exactly collectedFee/deposit. That disables peak tracking
+  // and trailing TP right when a fee-rich position needs profit protection.
+  const collectedFees = solMode ? safeNum(lpData.collectedFeeNative) : safeNum(lpData.collectedFee);
+  const pnl = currentValue + unclaimedFees + collectedFees - deposit;
   return (pnl / deposit) * 100;
 }
 
