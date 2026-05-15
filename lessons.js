@@ -19,6 +19,18 @@ const USER_CONFIG_PATH = path.join(__dirname, "user-config.json");
 const LESSONS_FILE = "./lessons.json";
 const MIN_EVOLVE_POSITIONS = 5;   // don't evolve until we have real data
 const MAX_CHANGE_PER_STEP  = 0.20; // never shift a threshold more than 20% at once
+const PERFORMANCE_SIGNAL_FIELDS = [
+  "organic_score",
+  "fee_tvl_ratio",
+  "volume",
+  "mcap",
+  "holder_count",
+  "smart_wallets_present",
+  "narrative_quality",
+  "study_win_rate",
+  "hive_consensus",
+  "volatility",
+];
 const MAX_MANUAL_LESSON_LENGTH = 400;
 
 function sanitizeLessonText(text, maxLen = MAX_MANUAL_LESSON_LENGTH) {
@@ -69,6 +81,17 @@ export async function tagAutoSwapFailure(poolAddress) {
       return;
     }
   }
+}
+
+function buildSignalSnapshot(perf) {
+  const snapshot = { ...(perf.signal_snapshot || {}) };
+  if (perf.base_mint && snapshot.base_mint == null) snapshot.base_mint = perf.base_mint;
+  for (const field of PERFORMANCE_SIGNAL_FIELDS) {
+    if (snapshot[field] == null && perf[field] != null) {
+      snapshot[field] = perf[field];
+    }
+  }
+  return Object.values(snapshot).some((value) => value != null) ? snapshot : null;
 }
 
 // ─── Record Position Performance ──────────────────────────────
@@ -135,8 +158,11 @@ export async function recordPerformance(perf) {
   }
 
   const tracked = perf.position ? getTrackedPosition(perf.position) : null;
-  const signalSnapshot = perf.signal_snapshot || tracked?.signal_snapshot || null;
-  const screeningBand = perf.screening_band || tracked?.signal_snapshot?.screening_band || tracked?.screening_band || null;
+  const signalSnapshot = buildSignalSnapshot({
+    ...perf,
+    signal_snapshot: perf.signal_snapshot || tracked?.signal_snapshot || null,
+  });
+  const screeningBand = perf.screening_band || signalSnapshot?.screening_band || tracked?.screening_band || null;
 
   const entry = {
     ...perf,

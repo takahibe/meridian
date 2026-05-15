@@ -28,7 +28,7 @@ import {
   createLiveMessage,
 } from "./telegram.js";
 import { generateBriefing } from "./briefing.js";
-import { getLastBriefingDate, setLastBriefingDate, getTrackedPosition, setPositionInstruction, updatePnlAndCheckExits, queuePeakConfirmation, resolvePendingPeak, queueTrailingDropConfirmation, resolvePendingTrailingDrop, markSpotAdded, hasSpotBeenAdded, clearSpotAdd } from "./state.js";
+import { getLastBriefingDate, setLastBriefingDate, getTrackedPosition, getTrackedPositions, setPositionInstruction, updatePnlAndCheckExits, queuePeakConfirmation, resolvePendingPeak, queueTrailingDropConfirmation, resolvePendingTrailingDrop, markSpotAdded, hasSpotBeenAdded, clearSpotAdd } from "./state.js";
 import { getActiveStrategy } from "./strategy-library.js";
 import { recordPositionSnapshot, recallForPool, addPoolNote, getRecentSnapshots, getTokenLossCount } from "./pool-memory.js";
 import { checkSmartWalletsOnPool } from "./smart-wallets.js";
@@ -1200,6 +1200,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
       const funnelLine = `  funnel: band=${banding.band} | x=${x?.narrative_confidence ?? "unknown"} | reasons=${(banding.reasons || []).join("; ") || "none"}${banding.risks?.length ? ` | risks=${banding.risks.join("; ")}` : ""}`;
 
       stageSignals(pool.pool, {
+        base_mint: pool.base?.mint || pool.base_mint || ti?.mint || null,
         gmgn_score: pool.gmgn_score ?? null,
         active_tvl: pool.active_tvl ?? null,
         open_positions: pool.open_positions ?? null,
@@ -1474,6 +1475,7 @@ Summarize the current portfolio health, total fees earned, and performance of al
   let _pnlPollBusy = false;
   const pnlPollInterval = setInterval(async () => {
     if (_managementBusy || _screeningBusy || _pnlPollBusy) return;
+    if (getTrackedPositions(true).length === 0) return;
     _pnlPollBusy = true;
     try {
       const result = await getMyPositions({ force: true, silent: true }).catch(() => null);
