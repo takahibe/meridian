@@ -802,6 +802,7 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
   const ageMinutes = pos.deployed_at ? (Date.now() - new Date(pos.deployed_at).getTime()) / 60000 : 0;
   const manualGraceMin = mgmtConfig.manualGracePeriodMinutes ?? 60;
   const inManualGrace = pos.deploy_source === "manual" && ageMinutes < manualGraceMin;
+  const minAgeForYieldCheck = mgmtConfig.minAgeBeforeYieldCheck ?? 60;
 
   let changed = false;
 
