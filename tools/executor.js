@@ -845,6 +845,22 @@ async function runSafetyChecks(name, args) {
         };
       }
 
+      // Block ultrafragile pools — fragility_score >= 40 is too risky for any deploy
+      const fragilityScore = args.fragility_score ?? args.signal_snapshot?.fragility_score ?? null;
+      const fragilityLevel = args.fragility_level ?? args.signal_snapshot?.fragility_level ?? null;
+      if (fragilityScore != null && Number(fragilityScore) >= 40) {
+        return {
+          pass: false,
+          reason: `fragility_score ${fragilityScore} (${fragilityLevel || 'unknown'}) exceeds hard maximum 40. Pool is too unstable for deploy.`,
+        };
+      }
+      if (fragilityLevel === 'ultrafragile') {
+        return {
+          pass: false,
+          reason: `fragility_level is ultrafragile. Pool is too unstable for deploy.`,
+        };
+      }
+
       return { pass: true };
     }
 
