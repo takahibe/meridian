@@ -184,6 +184,7 @@ const toolMap = {
       screenerFunnelEnabled: ["screening", "screenerFunnelEnabled"],
       xNarrativeMinConfidence: ["screening", "xNarrativeMinConfidence"],
       xNarrativeFailOpenOnUnavailable: ["screening", "xNarrativeFailOpenOnUnavailable"],
+      xNarrativeEnabled: ["screening", "xNarrativeEnabled"],
       xApiCacheMinutes: ["screening", "xApiCacheMinutes"],
       xApiTimeoutMs: ["screening", "xApiTimeoutMs"],
       xApiMaxResults: ["screening", "xApiMaxResults"],

@@ -18,11 +18,12 @@ function isXUnavailableFailOpenReason(reason = "") {
 export function assignBand(candidate = {}, signals = {}, cfg = {}) {
   const reasons = [];
   const risks = [];
+  const xEnabled = cfg.xNarrativeEnabled !== false; // default: true
   const narrativeConfidence = String(signals.narrative_confidence || candidate.narrative_confidence || "unknown").toLowerCase();
   const minNarrative = String(cfg.xNarrativeMinConfidence || "moderate").toLowerCase();
   const xUnavailableReason = String(signals.x_unavailable_reason || signals.reason || candidate.x_unavailable_reason || candidate.x_narrative?.reason || "");
   const xFailOpen = cfg.xNarrativeFailOpenOnUnavailable !== false;
-  const xFailOpenApplies = xFailOpen && narrativeConfidence === "unknown" && isXUnavailableFailOpenReason(xUnavailableReason);
+  const xFailOpenApplies = xEnabled && xFailOpen && narrativeConfidence === "unknown" && isXUnavailableFailOpenReason(xUnavailableReason);
   const shillBurst = Boolean(signals.shill_burst_flag);
   const activeTvl = Number(candidate.active_tvl);
   const minPoolTvl = Number(cfg.minPoolTvl ?? 15000);
@@ -111,7 +112,7 @@ export function assignBand(candidate = {}, signals = {}, cfg = {}) {
     };
   }
 
-  if (compareConfidence(narrativeConfidence, minNarrative) < 0 && !xFailOpenApplies) {
+  if (xEnabled && compareConfidence(narrativeConfidence, minNarrative) < 0 && !xFailOpenApplies) {
     return {
       band: "REJECT",
       stage: "x_narrative",
@@ -119,7 +120,9 @@ export function assignBand(candidate = {}, signals = {}, cfg = {}) {
       risks: narrativeConfidence === "unknown" ? ["x narrative unavailable"] : [],
     };
   }
-  if (xFailOpenApplies) {
+  if (!xEnabled) {
+    reasons.push("x narrative disabled (skipped)");
+  } else if (xFailOpenApplies) {
     reasons.push(`x narrative unavailable; fail-open enabled (${xUnavailableReason || "unknown X failure"})`);
     risks.push("x narrative unavailable — passed only because fail-open is enabled");
   } else {

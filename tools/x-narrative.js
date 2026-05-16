@@ -22,6 +22,14 @@ export function confidenceScore(level) {
 }
 
 export async function getXNarrativeSignal({ symbol, contract, mint } = {}) {
+  if (config.screening.xNarrativeEnabled === false) {
+    return {
+      narrative_confidence: "disabled",
+      x_narrative_score: 0,
+      reason: "x narrative disabled by config (xNarrativeEnabled=false)",
+      disabled: true,
+    };
+  }
   const token = String(contract || mint || "").trim();
   const sym = String(symbol || "").trim().toUpperCase();
   const cacheKey = `${token}:${sym}`;
