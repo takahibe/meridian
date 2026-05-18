@@ -678,6 +678,43 @@ export async function executeTool(name, args) {
 /**
  * Run safety checks before executing write operations.
  */
+function extractDeployBand(args = {}) {
+  const candidates = [
+    args.band,
+    args.screening_band,
+    args.signal_snapshot?.screening_band,
+    args.signal_snapshot?.band,
+  ];
+
+  if (typeof args.signal_snapshot === "string") {
+    try {
+      const parsed = JSON.parse(args.signal_snapshot);
+      candidates.push(parsed?.screening_band, parsed?.band);
+    } catch { /* ignore malformed snapshot */ }
+  }
+
+  for (const candidate of candidates) {
+    if (candidate == null) continue;
+    const band = String(candidate).trim().toUpperCase();
+    if (["A", "B", "C"].includes(band)) return band;
+  }
+  return null;
+}
+
+function getMinimumDeployForBand(args = {}) {
+  const baseMin = Math.max(0.1, Number(config.management.deployAmountSol ?? 0.5));
+  const reducedMin = Math.max(0.1, Number(config.management.deployAmountSolMin ?? baseMin));
+  const band = extractDeployBand(args);
+
+  if (band === "B") {
+    return { band, minDeploy: Math.min(baseMin, reducedMin), label: "band B reduced-risk" };
+  }
+  if (band === "C") {
+    return { band, minDeploy: null, label: "band C blocked" };
+  }
+  return { band: band || "unknown", minDeploy: baseMin, label: band === "A" ? "band A/full-size" : "default/full-size" };
+}
+
 async function runSafetyChecks(name, args) {
   switch (name) {
     case "deploy_position": {
@@ -731,11 +768,17 @@ async function runSafetyChecks(name, args) {
         };
       }
 
-      const minDeploy = Math.max(0.1, config.management.deployAmountSol);
+      const { band: deployBand, minDeploy, label: minDeployLabel } = getMinimumDeployForBand(args);
+      if (minDeploy == null) {
+        return {
+          pass: false,
+          reason: `Band ${deployBand} deploys are disabled for live Meridian. Band C candidates must stay shadow/manual only.`,
+        };
+      }
       if (amountY < minDeploy) {
         return {
           pass: false,
-          reason: `Amount ${amountY} SOL is below the minimum deploy amount (${minDeploy} SOL). Use at least ${minDeploy} SOL.`,
+          reason: `Amount ${amountY} SOL is below the minimum deploy amount (${minDeploy} SOL, ${minDeployLabel}). Use at least ${minDeploy} SOL.`,
         };
       }
       if (amountY > config.risk.maxDeployAmount) {
