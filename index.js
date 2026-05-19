@@ -1534,6 +1534,8 @@ Summarize the current portfolio health, total fees earned, and performance of al
           break;
         }
       }
+    } catch (error) {
+      log("cron_error", `PnL poll failed: ${error.message}`);
     } finally {
       _pnlPollBusy = false;
     }

@@ -802,8 +802,6 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
   const ageMinutes = pos.deployed_at ? (Date.now() - new Date(pos.deployed_at).getTime()) / 60000 : 0;
   const manualGraceMin = mgmtConfig.manualGracePeriodMinutes ?? 60;
   const inManualGrace = pos.deploy_source === "manual" && ageMinutes < manualGraceMin;
-  const minAgeForYieldCheck = mgmtConfig.minAgeBeforeYieldCheck ?? 60;
-
   let changed = false;
 
   const managementBand = pos.management_band || resolveManagementBand(pos.volatility, mgmtConfig.managementBands);
@@ -1005,7 +1003,7 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
     fee_per_tvl_24h != null &&
     mgmtConfig.minFeePerTvl24h != null &&
     fee_per_tvl_24h < mgmtConfig.minFeePerTvl24h &&
-    (age_minutes == null || age_minutes >= minAgeForYieldCheck)
+    (age_minutes == null || age_minutes >= (mgmtConfig.minAgeBeforeYieldCheck ?? 60))
   ) {
     return {
       action: "LOW_YIELD",
