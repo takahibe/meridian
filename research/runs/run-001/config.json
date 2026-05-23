@@ -1,0 +1,16 @@
+{
+  "run_id": "run-001",
+  "mode": "shadow",
+  "hypothesis": "Foundation shadow run — verify profile isolation and DRY_RUN behavior. No deploys; observe screening + management cycles only.",
+  "capital_budget_pct": 0,
+  "max_wallet_sol": 0,
+  "daily_loss_limit_sol": 0,
+  "max_open_positions": 0,
+  "min_deploy_amount_sol": 0,
+  "notes": [
+    "DRY_RUN forced true via PM2 env; no live capital path enabled this session.",
+    "Wallet should be a separate tiny-wallet, never the main production wallet. Startup guard refuses to start if they match.",
+    "hiveMindPublishMode defaults to 'off' for autoresearch profile, so lessons are never pushed to shared HiveMind from this process.",
+    "Telegram alerts get [AUTORES] prefix injected at postTelegram layer; chat is shared with main."
+  ]
+}

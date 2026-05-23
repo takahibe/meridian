@@ -119,3 +119,10 @@ export function encryptEnvRaw({
 }
 
 loadEnv();
+
+if (process.env.MERIDIAN_PROFILE === "autoresearch") {
+  const profileEnvPath = path.join(process.cwd(), ".env.autoresearch");
+  if (fs.existsSync(profileEnvPath)) {
+    loadEnv({ envPath: profileEnvPath, override: true });
+  }
+}

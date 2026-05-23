@@ -42,7 +42,8 @@ test-*.js
 
 # Autoresearch profile artifacts
 profiles/
-research/
+research/runs/*/results.jsonl
+research/runs/*/output/
 
 # Local state backups
 *.json.backup-*
