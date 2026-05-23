@@ -349,6 +349,22 @@ export const config = {
     lpAgentRelayEnabled: u.lpAgentRelayEnabled ?? false,
   },
 
+  // ─── HiveMind Publish Mode ────────────────
+  // "production" = normal publish; "experimental" = tag with profile+runId; "off" = no publish
+  hiveMindPublishMode: u.hiveMindPublishMode
+    ?? (process.env.MERIDIAN_PROFILE === "autoresearch" ? "off" : "production"),
+
+  // ─── Autoresearch ─────────────────────────
+  autoresearch: {
+    enabled:             u.autoresearch?.enabled             ?? false,
+    runId:               process.env.MERIDIAN_RESEARCH_RUN_ID ?? u.autoresearch?.runId ?? null,
+    capitalBudgetPct:    u.autoresearch?.capitalBudgetPct    ?? 0.02,
+    maxWalletSol:        u.autoresearch?.maxWalletSol        ?? null,
+    dailyLossLimitSol:   u.autoresearch?.dailyLossLimitSol   ?? null,
+    promptNotes:         u.autoresearch?.promptNotes         ?? null,
+    candidateConfigPath: u.autoresearch?.candidateConfigPath ?? null,
+  },
+
   jupiter: {
     apiKey: process.env.JUPITER_API_KEY ?? "",
     referralAccount:

@@ -308,8 +308,14 @@ function inferLessonSourceType(lesson) {
 
 export async function pushHiveLesson(lesson) {
   if (!isHiveMindEnabled()) return null;
+  const publishMode = config.hiveMindPublishMode ?? "production";
+  if (publishMode === "off") return null;
   const body = buildLessonEvent(lesson);
   if (!body) return null;
+  if (publishMode === "experimental") {
+    body.profile = process.env.MERIDIAN_PROFILE ?? "autoresearch";
+    body.runId = config.autoresearch?.runId ?? null;
+  }
   try {
     return await requestJson("/api/hivemind/lessons/push", {
       method: "POST",
@@ -333,29 +339,33 @@ export function shouldCountInAdjustedWinRate(closeReason) {
 
 export async function pushHivePerformanceEvent(perf) {
   if (!isHiveMindEnabled()) return null;
+  const publishMode = config.hiveMindPublishMode ?? "production";
+  if (publishMode === "off") return null;
+  const body = {
+    eventId: sanitizeText(perf.eventId, 200) || `close:${getAgentId()}:${perf.position || perf.pool}:${perf.recorded_at || Date.now()}`,
+    agentId: getAgentId(),
+    version: AGENT_VERSION,
+    timestamp: perf.recorded_at || new Date().toISOString(),
+    event: {
+      pool: sanitizeText(perf.pool, 64) || null,
+      poolName: sanitizeText(perf.pool_name, 80) || null,
+      baseMint: sanitizeText(perf.base_mint, 64) || null,
+      strategy: sanitizeText(perf.strategy, 32) || null,
+      closeReason: sanitizeText(perf.close_reason, 200) || "unknown",
+      pnlUsd: Number(perf.pnl_usd || 0),
+      pnlPct: Number(perf.pnl_pct || 0),
+      feesUsd: Number(perf.fees_earned_usd || 0),
+      feesSol: Number(perf.fees_earned_sol || 0),
+      minutesHeld: Number(perf.minutes_held || 0),
+      countInAdjustedWinRate: shouldCountInAdjustedWinRate(perf.close_reason),
+    },
+  };
+  if (publishMode === "experimental") {
+    body.profile = process.env.MERIDIAN_PROFILE ?? "autoresearch";
+    body.runId = config.autoresearch?.runId ?? null;
+  }
   try {
-    return await requestJson("/api/hivemind/performance/push", {
-      method: "POST",
-      body: {
-        eventId: sanitizeText(perf.eventId, 200) || `close:${getAgentId()}:${perf.position || perf.pool}:${perf.recorded_at || Date.now()}`,
-        agentId: getAgentId(),
-        version: AGENT_VERSION,
-        timestamp: perf.recorded_at || new Date().toISOString(),
-        event: {
-          pool: sanitizeText(perf.pool, 64) || null,
-          poolName: sanitizeText(perf.pool_name, 80) || null,
-          baseMint: sanitizeText(perf.base_mint, 64) || null,
-          strategy: sanitizeText(perf.strategy, 32) || null,
-          closeReason: sanitizeText(perf.close_reason, 200) || "unknown",
-          pnlUsd: Number(perf.pnl_usd || 0),
-          pnlPct: Number(perf.pnl_pct || 0),
-          feesUsd: Number(perf.fees_earned_usd || 0),
-          feesSol: Number(perf.fees_earned_sol || 0),
-          minutesHeld: Number(perf.minutes_held || 0),
-          countInAdjustedWinRate: shouldCountInAdjustedWinRate(perf.close_reason),
-        },
-      },
-    });
+    return await requestJson("/api/hivemind/performance/push", { method: "POST", body });
   } catch (error) {
     log("hivemind_warn", `Performance push failed: ${error.message}`);
     return null;
