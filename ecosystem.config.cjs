@@ -33,7 +33,7 @@ module.exports = {
         MERIDIAN_PROFILE: "autoresearch",
         MERIDIAN_DATA_DIR: "profiles/autoresearch",
         MERIDIAN_RESEARCH_RUN_ID: "run-001",
-        DRY_RUN: "true",
+        DRY_RUN: "false",
       },
     },
   ],

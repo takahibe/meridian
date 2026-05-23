@@ -1,16 +1,17 @@
 {
   "run_id": "run-001",
-  "mode": "shadow",
-  "hypothesis": "Foundation shadow run — verify profile isolation and DRY_RUN behavior. No deploys; observe screening + management cycles only.",
-  "capital_budget_pct": 0,
-  "max_wallet_sol": 0,
-  "daily_loss_limit_sol": 0,
-  "max_open_positions": 0,
-  "min_deploy_amount_sol": 0,
+  "mode": "live",
+  "hypothesis": "Tiny-wallet live shadow of main meridian's strategy. Verify behavior under real fee accrual, OOR dynamics, and close conditions that DRY_RUN cannot simulate. No strategy divergence from main yet — this run validates that the isolated profile produces a reasonable baseline before any A/B experiment.",
+  "wallet_seed_sol": "~1-2",
+  "max_open_positions": 1,
+  "deploy_amount_sol": 0.2,
+  "max_deploy_amount_sol": 1,
+  "position_size_pct": 0.25,
+  "min_sol_to_open": 0.4,
   "notes": [
-    "DRY_RUN forced true via PM2 env; no live capital path enabled this session.",
-    "Wallet should be a separate tiny-wallet, never the main production wallet. Startup guard refuses to start if they match.",
-    "hiveMindPublishMode defaults to 'off' for autoresearch profile, so lessons are never pushed to shared HiveMind from this process.",
-    "Telegram alerts get [AUTORES] prefix injected at postTelegram layer; chat is shared with main."
+    "Caps live in profiles/autoresearch/user-config.json and are enforced by the standard deploy_position safety checks, not by autoresearch-specific guards. Upstream's autoresearch capital-budget / daily-loss enforcement was deferred in Phase 1 due to Band-B conflict.",
+    "hiveMindPublishMode='off' for this profile — research lessons never flow to shared HiveMind.",
+    "Telegram alerts arrive on the shared chat with [AUTORES] prefix.",
+    "DLMM LP cannot be paper-traded usefully — fee accrual, OOR fills, and close behavior all depend on real on-chain price action. Hence live tiny-wallet rather than DRY_RUN."
   ]
 }
