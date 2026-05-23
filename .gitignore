@@ -39,3 +39,13 @@ docs/
 
 # Test files
 test-*.js
+
+# Autoresearch profile artifacts
+profiles/
+research/
+
+# Local state backups
+*.json.backup-*
+
+# Hermes plan scratchpad
+.hermes/
