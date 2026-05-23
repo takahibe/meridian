@@ -1,4 +1,7 @@
 import "./envcrypt.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import cron from "node-cron";
 import readline from "readline";
 import { agentLoop } from "./agent.js";
@@ -42,9 +45,59 @@ import { appendDecision } from "./decision-log.js";
 import { runWeeklySourceCheck } from "./scripts/weekly-source-check.js";
 import { computeFeeDecayClose, computeLowerDumpVelocityClose } from "./management-rules.js";
 
+async function runAutoresearchStartupGuard() {
+  const profile = process.env.MERIDIAN_PROFILE;
+  const dataDir = process.env.MERIDIAN_DATA_DIR;
+  const rootDir = path.dirname(fileURLToPath(import.meta.url));
+
+  log("startup", `[autoresearch] Profile: ${profile}, DataDir: ${dataDir || "(unset)"}`);
+
+  if (!dataDir) {
+    log("startup_error", "[autoresearch] ABORT: MERIDIAN_DATA_DIR is not set. Profile isolation is required.");
+    process.exit(1);
+  }
+  if (path.resolve(rootDir, dataDir) === rootDir) {
+    log("startup_error", "[autoresearch] ABORT: MERIDIAN_DATA_DIR resolves to project root. Use a subdirectory like profiles/autoresearch.");
+    process.exit(1);
+  }
+
+  const arWalletKey = process.env.WALLET_PRIVATE_KEY;
+  if (!arWalletKey) {
+    log("startup_error", "[autoresearch] ABORT: WALLET_PRIVATE_KEY is not set.");
+    process.exit(1);
+  }
+
+  try {
+    const prodConfigPath = path.join(rootDir, "user-config.json");
+    if (fs.existsSync(prodConfigPath)) {
+      const prodConfig = JSON.parse(fs.readFileSync(prodConfigPath, "utf8"));
+      if (prodConfig.walletKey && prodConfig.walletKey === arWalletKey) {
+        log("startup_error", "[autoresearch] ABORT: Autoresearch wallet matches production wallet. Use a different wallet for autoresearch.");
+        process.exit(1);
+      }
+    }
+  } catch { /* ignore read errors */ }
+
+  const maxWalletSol = config.autoresearch?.maxWalletSol;
+  if (maxWalletSol != null && process.env.DRY_RUN !== "true") {
+    try {
+      const balances = await getWalletBalances({});
+      if (balances?.sol > maxWalletSol) {
+        log("startup_warn", `[autoresearch] Wallet balance ${balances.sol} SOL exceeds maxWalletSol=${maxWalletSol}. New deploys will be blocked until balance drops.`);
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  const runId = config.autoresearch?.runId;
+  log("startup", `[autoresearch] Guards passed. runId=${runId ?? "(none)"}, hiveMindPublishMode=${config.hiveMindPublishMode}`);
+}
+
 log("startup", "DLMM LP Agent starting...");
 log("startup", `Mode: ${process.env.DRY_RUN === "true" ? "DRY RUN" : "LIVE"}`);
 log("startup", `Model: ${process.env.LLM_MODEL || "hermes-3-405b"}`);
+if (process.env.MERIDIAN_PROFILE === "autoresearch") {
+  await runAutoresearchStartupGuard();
+}
 ensureAgentId();
 bootstrapHiveMind().catch((error) => log("hivemind_warn", `Bootstrap failed: ${error.message}`));
 startHiveMindBackgroundSync();
