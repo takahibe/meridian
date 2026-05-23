@@ -81,6 +81,9 @@ export function isEnabled() {
 
 async function postTelegram(method, body) {
   if (!TOKEN || !chatId) return null;
+  if (process.env.MERIDIAN_PROFILE === "autoresearch" && body && typeof body.text === "string") {
+    body = { ...body, text: ("[AUTORES] " + body.text).slice(0, 4096) };
+  }
   try {
     const res = await fetch(`${BASE}/${method}`, {
       method: "POST",
