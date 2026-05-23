@@ -1,10 +1,8 @@
 import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import { paths } from "./paths.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const USER_CONFIG_PATH = path.join(__dirname, "user-config.json");
-const GMGN_CONFIG_PATH = path.join(__dirname, "gmgn-config.json");
+const USER_CONFIG_PATH = paths.userConfigPath;
+const GMGN_CONFIG_PATH = paths.gmgnConfigPath;
 const DEFAULT_HIVEMIND_URL = "https://api.agentmeridian.xyz";
 const DEFAULT_AGENT_MERIDIAN_API_URL = "https://api.agentmeridian.xyz/api";
 const DEFAULT_AGENT_MERIDIAN_PUBLIC_KEY = "bWVyaWRpYW4taXMtdGhlLWJlc3QtYWdlbnRz";

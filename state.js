@@ -9,6 +9,7 @@
  */
 
 import fs from "fs";
+import { paths } from "./paths.js";
 import { log } from "./logger.js";
 import { computeFeeDecayClose, computeLowerDumpVelocityClose, computeUpperOorFeeExtension } from "./management-rules.js";
 
@@ -191,7 +192,7 @@ function applyFragilityToBand(bandConfig = {}, fragility = { score: 0, level: "n
   return adjusted;
 }
 
-const STATE_FILE = "./state.json";
+const STATE_FILE = paths.statePath;
 
 const MAX_RECENT_EVENTS = 20;
 const MAX_INSTRUCTION_LENGTH = 280;

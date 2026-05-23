@@ -2,13 +2,13 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
+import { paths } from "./paths.js";
 import { log } from "./logger.js";
 import { config } from "./config.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const USER_CONFIG_PATH = path.join(__dirname, "user-config.json");
-const CACHE_PATH = path.join(__dirname, "hivemind-cache.json");
-const PACKAGE_JSON_PATH = path.join(__dirname, "package.json");
+const USER_CONFIG_PATH = paths.userConfigPath;
+const CACHE_PATH = paths.hivemindCachePath;
+const PACKAGE_JSON_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "package.json");
 const HEARTBEAT_INTERVAL_MS = 15 * 60 * 1000;
 
 let _heartbeatTimer = null;

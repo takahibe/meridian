@@ -1,16 +1,14 @@
 import fs from "fs";
 import path from "path";
+import { paths } from "./paths.js";
 
-const LOG_DIR = "./logs";
+const LOG_DIR = paths.logDir;
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
 
 const LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
 const currentLevel = LEVELS[LOG_LEVEL] || 1;
 
-// Ensure log directory exists
-if (!fs.existsSync(LOG_DIR)) {
-  fs.mkdirSync(LOG_DIR, { recursive: true });
-}
+fs.mkdirSync(LOG_DIR, { recursive: true });
 
 /**
  * General log function.

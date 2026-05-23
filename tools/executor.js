@@ -27,10 +27,11 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { execSync, spawn } from "child_process";
+import { paths } from "../paths.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const USER_CONFIG_PATH = path.join(__dirname, "../user-config.json");
-const GMGN_CONFIG_PATH = path.join(__dirname, "../gmgn-config.json");
+const USER_CONFIG_PATH = paths.userConfigPath;
+const GMGN_CONFIG_PATH = paths.gmgnConfigPath;
 import { log, logAction } from "../logger.js";
 import { notifyDeploy, notifyClose, notifySwap } from "../telegram.js";
 

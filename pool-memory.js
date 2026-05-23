@@ -6,10 +6,11 @@
  */
 
 import fs from "fs";
+import { paths } from "./paths.js";
 import { log } from "./logger.js";
 import { config } from "./config.js";
 
-const POOL_MEMORY_FILE = "./pool-memory.json";
+const POOL_MEMORY_FILE = paths.poolMemoryPath;
 const MAX_NOTE_LENGTH = 280;
 
 function sanitizeStoredNote(text, maxLen = MAX_NOTE_LENGTH) {

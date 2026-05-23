@@ -7,16 +7,13 @@
  */
 
 import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import { paths } from "./paths.js";
 import { log } from "./logger.js";
 import { getSharedLessonsForPrompt, pushHiveLesson, pushHivePerformanceEvent } from "./hivemind.js";
 import { getTrackedPosition } from "./state.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const USER_CONFIG_PATH = path.join(__dirname, "user-config.json");
-
-const LESSONS_FILE = "./lessons.json";
+const USER_CONFIG_PATH = paths.userConfigPath;
+const LESSONS_FILE = paths.lessonsPath;
 const MIN_EVOLVE_POSITIONS = 5;   // don't evolve until we have real data
 const MAX_CHANGE_PER_STEP  = 0.20; // never shift a threshold more than 20% at once
 const PERFORMANCE_SIGNAL_FIELDS = [
