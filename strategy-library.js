@@ -7,9 +7,10 @@
  */
 
 import fs from "fs";
+import { paths } from "./paths.js";
 import { log } from "./logger.js";
 
-const STRATEGY_FILE = "./strategy-library.json";
+const STRATEGY_FILE = paths.strategyLibraryPath;
 
 function load() {
   if (!fs.existsSync(STRATEGY_FILE)) return { active: null, strategies: {} };

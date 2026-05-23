@@ -7,9 +7,10 @@
  */
 
 import fs from "fs";
+import { paths } from "./paths.js";
 import { log } from "./logger.js";
 
-const BLOCKLIST_FILE = "./dev-blocklist.json";
+const BLOCKLIST_FILE = paths.devBlocklistPath;
 
 function load() {
   if (!fs.existsSync(BLOCKLIST_FILE)) return {};

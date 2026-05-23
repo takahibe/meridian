@@ -1,11 +1,9 @@
 import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import { paths } from "../paths.js";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_PATH = path.join(__dirname, "..", "x-narrative-cache.json");
+const CACHE_PATH = paths.xNarrativeCachePath;
 const SEARCH_URL = "https://api.x.com/2/tweets/search/recent";
 const cache = loadPersistentCache();
 

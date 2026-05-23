@@ -1,12 +1,13 @@
 import fs from "fs";
+import { paths } from "./paths.js";
 import { log } from "./logger.js";
 import { getPerformanceSummary } from "./lessons.js";
 
-const STATE_FILE = "./state.json";
-const LESSONS_FILE = "./lessons.json";
-const USER_CONFIG_FILE = "./user-config.json";
-const X_NARRATIVE_CACHE_FILE = "./x-narrative-cache.json";
-const LOG_DIR = "./logs";
+const STATE_FILE = paths.statePath;
+const LESSONS_FILE = paths.lessonsPath;
+const USER_CONFIG_FILE = paths.userConfigPath;
+const X_NARRATIVE_CACHE_FILE = paths.xNarrativeCachePath;
+const LOG_DIR = paths.logDir;
 
 export async function generateBriefing() {
   const state = loadJson(STATE_FILE) || { positions: {}, recentEvents: [] };

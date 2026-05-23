@@ -7,9 +7,10 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
+import { paths } from "../paths.js";
 import { log } from "../logger.js";
 
-const HISTORY_PATH = new URL("../price-history.json", import.meta.url).pathname;
+const HISTORY_PATH = paths.priceHistoryPath;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /**
