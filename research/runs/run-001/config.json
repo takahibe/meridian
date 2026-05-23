@@ -1,17 +1,24 @@
 {
   "run_id": "run-001",
   "mode": "live",
-  "hypothesis": "Tiny-wallet live shadow of main meridian's strategy. Verify behavior under real fee accrual, OOR dynamics, and close conditions that DRY_RUN cannot simulate. No strategy divergence from main yet — this run validates that the isolated profile produces a reasonable baseline before any A/B experiment.",
+  "hypothesis": "Lowering outOfRangeWaitMinutes from main's 30 to 15 will improve net SOL per closed position by accelerating capital rotation on lower-OOR positions that would otherwise sit waiting for unlikely recoveries. Bid-ask post-ATH flow rarely benefits from waiting once price has cleared the lower bin.",
+  "control_variable": "outOfRangeWaitMinutes",
+  "control_value_main": 30,
+  "treatment_value_autores": 15,
   "wallet_seed_sol": "~1-2",
   "max_open_positions": 1,
   "deploy_amount_sol": 0.2,
   "max_deploy_amount_sol": 1,
   "position_size_pct": 0.25,
   "min_sol_to_open": 0.4,
+  "kill_metric": "winrate below 40% over 10 closed positions, OR no deploys in 5 days",
+  "sample_target": "10 closed positions OR 14 days, whichever first",
+  "expected_directional_outcome": "Higher close frequency, shorter avg hold time, modest winrate improvement if recoveries are genuinely rare in this regime; risk: lose recoveries that would have come back to range",
   "notes": [
-    "Caps live in profiles/autoresearch/user-config.json and are enforced by the standard deploy_position safety checks, not by autoresearch-specific guards. Upstream's autoresearch capital-budget / daily-loss enforcement was deferred in Phase 1 due to Band-B conflict.",
-    "hiveMindPublishMode='off' for this profile — research lessons never flow to shared HiveMind.",
-    "Telegram alerts arrive on the shared chat with [AUTORES] prefix.",
-    "DLMM LP cannot be paper-traded usefully — fee accrual, OOR fills, and close behavior all depend on real on-chain price action. Hence live tiny-wallet rather than DRY_RUN."
+    "Caps live in profiles/autoresearch/user-config.json. The only variable change vs main is outOfRangeWaitMinutes (15 vs 30); position sizing is smaller because the wallet is smaller, but the strategy mechanics are identical.",
+    "Direct PnL comparison must normalize for position size: use net_sol / deploy_sol per close, not raw PnL.",
+    "Compare with scripts/research-compare.js once sample size is met.",
+    "hiveMindPublishMode='off' for this profile.",
+    "Telegram alerts arrive on the shared chat with [AUTORES] prefix."
   ]
 }
