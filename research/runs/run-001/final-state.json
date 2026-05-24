@@ -1,0 +1,2493 @@
+{
+  "positions": {
+    "9YSLmBmU3QahasUAjozdKzwvcmr5Fq3dCDM8G2xLMTkE": {
+      "position": "9YSLmBmU3QahasUAjozdKzwvcmr5Fq3dCDM8G2xLMTkE",
+      "pool": "Cbj8TZQdBwEWVgjLc7p2Xqx2D4CpekiPxPTB1qLS3SdT",
+      "pool_name": "TOLYBOT-SOL (3% fee)",
+      "strategy": "bid_ask",
+      "bin_range": {
+        "min": -547,
+        "max": -507,
+        "bins_below": 40,
+        "bins_above": 0
+      },
+      "amount_sol": 0.2,
+      "amount_x": 0,
+      "active_bin_at_deploy": -507,
+      "bin_step": 100,
+      "volatility": 2.3184,
+      "management_band": "B",
+      "management_band_config": {
+        "key": "B",
+        "maxVolatility": 3,
+        "trailingTriggerPct": 1.5,
+        "trailingDropPct": 0.75,
+        "upperOorWaitMinutes": 4,
+        "lowerOorWaitMinutes": 30,
+        "pumpedHarvestMinPnlPct": 1.5,
+        "fragilityConfirmationDelayMs": 3000
+      },
+      "fee_tvl_ratio": 0.3974,
+      "initial_fee_tvl_24h": 0.3974,
+      "organic_score": 75,
+      "initial_value_usd": 16.82,
+      "mcap": 550441,
+      "token_age_hours": 162,
+      "top10_pct": null,
+      "bot_holders_pct": null,
+      "bundler_pct": null,
+      "velocity_5m_pct": 0,
+      "acceleration_1m_pct": 0,
+      "max_volume_share_pct": 0,
+      "fragility_score": 27,
+      "fragility_level": "fast",
+      "fragility_reasons": [
+        "smallcap",
+        "thin TVL"
+      ],
+      "screening_band": "A",
+      "signal_snapshot": {
+        "gmgn_score": null,
+        "fee_active_tvl_ratio": 0.3974,
+        "volatility": 2.3184,
+        "holders": null,
+        "mcap": 550441,
+        "organic_score": 75,
+        "fragility_level": "low",
+        "fragility_score": null,
+        "lpagent_confidence": null,
+        "smart_wallets_present": null,
+        "smart_wallet_count": null,
+        "discord_active": null,
+        "narrative_confidence": "moderate",
+        "x_narrative_score": null,
+        "token_age_hours": 162,
+        "screening_band": "A",
+        "active_tvl": 38922,
+        "funnel_reasons": [
+          "3% fee high efficiency (fee/TVL 0.3974)",
+          "organic score 75",
+          "5.2k holders solid distribution",
+          "smart_money_buy signal active",
+          "162hr token age past fragile window"
+        ],
+        "funnel_risks": [
+          "dev sold all positions",
+          "bundle 5% elevated",
+          "suspicious 2.8% flagged"
+        ],
+        "band": "A",
+        "open_positions": 121
+      },
+      "deployed_at": "2026-05-23T16:47:05.917Z",
+      "deploy_source": "auto",
+      "auto_close_disabled": false,
+      "stop_loss_warned_at": null,
+      "out_of_range_since": null,
+      "last_claim_at": null,
+      "total_fees_claimed_usd": 0,
+      "rebalance_count": 0,
+      "closed": true,
+      "closed_at": "2026-05-23T17:47:30.172Z",
+      "notes": [
+        "Auto-closed during state sync (not found on-chain)",
+        "Closed at 2026-05-23T17:47:30.172Z: Low yield: fee/TVL 1.85% < min 7% (age: 60m)"
+      ],
+      "peak_pnl_pct": 0.29,
+      "pending_peak_pnl_pct": null,
+      "pending_peak_started_at": null,
+      "pending_trailing_current_pnl_pct": null,
+      "pending_trailing_peak_pnl_pct": null,
+      "pending_trailing_drop_pct": null,
+      "pending_trailing_started_at": null,
+      "confirmed_trailing_exit_reason": null,
+      "confirmed_trailing_exit_until": null,
+      "trailing_active": false,
+      "lower_bounce_touched_at": null,
+      "lower_bounce_touch_bin": null,
+      "smart_wallet_count": null,
+      "narrative_confidence": "moderate",
+      "x_unavailable_reason": null,
+      "active_tvl_at_deploy": 38922,
+      "volume_at_deploy": null,
+      "deploy_thesis_reasons": [
+        "3% fee high efficiency (fee/TVL 0.3974)",
+        "organic score 75",
+        "5.2k holders solid distribution",
+        "smart_money_buy signal active",
+        "162hr token age past fragile window"
+      ],
+      "deploy_thesis_risks": [
+        "dev sold all positions",
+        "bundle 5% elevated",
+        "suspicious 2.8% flagged"
+      ],
+      "snapshots": [
+        {
+          "ts": "2026-05-23T17:42:18.928Z",
+          "active_bin": -510,
+          "pnl_pct": -0.11,
+          "unclaimed_fees_usd": 0.0082,
+          "fee_per_tvl_24h": 1.28
+        },
+        {
+          "ts": "2026-05-23T17:42:48.874Z",
+          "active_bin": -510,
+          "pnl_pct": -0.05,
+          "unclaimed_fees_usd": 0.0082,
+          "fee_per_tvl_24h": 1.27
+        },
+        {
+          "ts": "2026-05-23T17:43:19.372Z",
+          "active_bin": -510,
+          "pnl_pct": -0.17,
+          "unclaimed_fees_usd": 0.0082,
+          "fee_per_tvl_24h": 1.26
+        },
+        {
+          "ts": "2026-05-23T17:43:49.517Z",
+          "active_bin": -510,
+          "pnl_pct": -0.1,
+          "unclaimed_fees_usd": 0.0082,
+          "fee_per_tvl_24h": 1.25
+        },
+        {
+          "ts": "2026-05-23T17:44:18.949Z",
+          "active_bin": -510,
+          "pnl_pct": -0.08,
+          "unclaimed_fees_usd": 0.0081,
+          "fee_per_tvl_24h": 1.24
+        },
+        {
+          "ts": "2026-05-23T17:44:49.548Z",
+          "active_bin": -511,
+          "pnl_pct": -0.05,
+          "unclaimed_fees_usd": 0.0128,
+          "fee_per_tvl_24h": 1.91
+        },
+        {
+          "ts": "2026-05-23T17:45:19.074Z",
+          "active_bin": -511,
+          "pnl_pct": 0.32,
+          "unclaimed_fees_usd": 0.0129,
+          "fee_per_tvl_24h": 1.9
+        },
+        {
+          "ts": "2026-05-23T17:45:49.575Z",
+          "active_bin": -511,
+          "pnl_pct": 0.34,
+          "unclaimed_fees_usd": 0.0129,
+          "fee_per_tvl_24h": 1.88
+        },
+        {
+          "ts": "2026-05-23T17:46:18.727Z",
+          "active_bin": -511,
+          "pnl_pct": -0.04,
+          "unclaimed_fees_usd": 0.013,
+          "fee_per_tvl_24h": 1.88
+        },
+        {
+          "ts": "2026-05-23T17:46:48.878Z",
+          "active_bin": -511,
+          "pnl_pct": -0.24,
+          "unclaimed_fees_usd": 0.0128,
+          "fee_per_tvl_24h": 1.86
+        },
+        {
+          "ts": "2026-05-23T17:47:19.072Z",
+          "active_bin": -512,
+          "pnl_pct": -0.15,
+          "unclaimed_fees_usd": 0.0131,
+          "fee_per_tvl_24h": 1.85
+        },
+        {
+          "ts": "2026-05-23T17:47:19.590Z",
+          "active_bin": -512,
+          "pnl_pct": -0.15,
+          "unclaimed_fees_usd": 0.0131,
+          "fee_per_tvl_24h": 1.85
+        }
+      ],
+      "upper_oor_fee_extensions": 0
+    },
+    "GaVu7LDBkMDfWWsXv3eNJEwvUS9Q6ugq8B4GuXhv2djN": {
+      "position": "GaVu7LDBkMDfWWsXv3eNJEwvUS9Q6ugq8B4GuXhv2djN",
+      "pool": "2FMA5vAhYX59tibV45uhUg9XrYmrKh2x3KRG5BuhgGgk",
+      "pool_name": "TOLYBOT-SOL",
+      "strategy": "bid_ask",
+      "bin_range": {
+        "min": -455,
+        "max": -411,
+        "bins_below": 44,
+        "bins_above": 0
+      },
+      "amount_sol": 0.35,
+      "amount_x": 0,
+      "active_bin_at_deploy": -411,
+      "bin_step": 125,
+      "volatility": 1.8755,
+      "management_band": "B",
+      "management_band_config": {
+        "key": "B",
+        "maxVolatility": 3,
+        "trailingTriggerPct": 1.5,
+        "trailingDropPct": 0.75,
+        "upperOorWaitMinutes": 4,
+        "lowerOorWaitMinutes": 30,
+        "pumpedHarvestMinPnlPct": 1.5,
+        "fragilityConfirmationDelayMs": 3000
+      },
+      "fee_tvl_ratio": 0.3336,
+      "initial_fee_tvl_24h": 0.3336,
+      "organic_score": 75,
+      "initial_value_usd": 43.2,
+      "mcap": 512158,
+      "token_age_hours": 164,
+      "top10_pct": null,
+      "bot_holders_pct": null,
+      "bundler_pct": null,
+      "velocity_5m_pct": 0,
+      "acceleration_1m_pct": 0,
+      "max_volume_share_pct": 0,
+      "fragility_score": 32,
+      "fragility_level": "fast",
+      "fragility_reasons": [
+        "smallcap",
+        "thin TVL",
+        "wide bin step"
+      ],
+      "screening_band": "B",
+      "signal_snapshot": {
+        "base_mint": "FjgXCL8ov5BkvZGoY2QthvhUmx82mVkSmhni6nCJpump",
+        "gmgn_score": null,
+        "active_tvl": 18707,
+        "open_positions": 81,
+        "organic_score": 75,
+        "fee_tvl_ratio": 0.3336,
+        "fee_active_tvl_ratio": 0.3336,
+        "volume": 5281,
+        "mcap": 512158,
+        "holder_count": 5161,
+        "holders": null,
+        "smart_wallets_present": null,
+        "smart_wallet_count": null,
+        "discord_active": null,
+        "narrative_quality": "present",
+        "narrative_confidence": "weak",
+        "x_narrative_score": null,
+        "volatility": 1.8755,
+        "fragility_level": "fast",
+        "fragility_score": 32,
+        "lpagent_confidence": null,
+        "token_age_hours": 164,
+        "screening_band": "B",
+        "funnel_reasons": [
+          "active_tvl $18.7k cleared",
+          "open_positions 81 cleared",
+          "lpagent strong signal (5) with deep LP cohort",
+          "organic score 75 — solid buyer base",
+          "fees paid 197.75 SOL — above hard gate"
+        ],
+        "funnel_risks": [
+          "fragility fast(32) — tight range required",
+          "thin TVL + smallcap ($512k mcap)",
+          "X narrative unavailable — fail-open bypassed",
+          "no smart wallets present",
+          "1h price down 3.13%"
+        ],
+        "x_unavailable_reason": "missing bearer token",
+        "band": "B"
+      },
+      "deployed_at": "2026-05-23T17:56:19.816Z",
+      "deploy_source": "auto",
+      "auto_close_disabled": false,
+      "stop_loss_warned_at": null,
+      "out_of_range_since": "2026-05-23T18:25:18.979Z",
+      "last_claim_at": null,
+      "total_fees_claimed_usd": 0,
+      "rebalance_count": 0,
+      "closed": true,
+      "closed_at": "2026-05-23T18:29:28.951Z",
+      "notes": [
+        "Auto-closed during state sync (not found on-chain)",
+        "Closed at 2026-05-23T18:29:28.951Z: Upper OOR close (Band B): out of range for 4m (limit: 4m)"
+      ],
+      "peak_pnl_pct": 1.07,
+      "pending_peak_pnl_pct": null,
+      "pending_peak_started_at": null,
+      "pending_trailing_current_pnl_pct": null,
+      "pending_trailing_peak_pnl_pct": null,
+      "pending_trailing_drop_pct": null,
+      "pending_trailing_started_at": null,
+      "confirmed_trailing_exit_reason": null,
+      "confirmed_trailing_exit_until": null,
+      "trailing_active": false,
+      "lower_bounce_touched_at": null,
+      "lower_bounce_touch_bin": null,
+      "smart_wallet_count": null,
+      "narrative_confidence": "weak",
+      "x_unavailable_reason": "missing bearer token",
+      "active_tvl_at_deploy": 18707,
+      "volume_at_deploy": 5281,
+      "deploy_thesis_reasons": [
+        "active_tvl $18.7k cleared",
+        "open_positions 81 cleared",
+        "lpagent strong signal (5) with deep LP cohort",
+        "organic score 75 — solid buyer base",
+        "fees paid 197.75 SOL — above hard gate"
+      ],
+      "deploy_thesis_risks": [
+        "fragility fast(32) — tight range required",
+        "thin TVL + smallcap ($512k mcap)",
+        "X narrative unavailable — fail-open bypassed",
+        "no smart wallets present",
+        "1h price down 3.13%"
+      ],
+      "snapshots": [
+        {
+          "ts": "2026-05-23T18:24:18.949Z",
+          "active_bin": -414,
+          "pnl_pct": 0.69,
+          "unclaimed_fees_usd": 0.0288,
+          "fee_per_tvl_24h": 5.04
+        },
+        {
+          "ts": "2026-05-23T18:24:49.007Z",
+          "active_bin": -413,
+          "pnl_pct": 0.87,
+          "unclaimed_fees_usd": 0.0294,
+          "fee_per_tvl_24h": 5.05
+        },
+        {
+          "ts": "2026-05-23T18:25:18.985Z",
+          "active_bin": -408,
+          "pnl_pct": 1.12,
+          "unclaimed_fees_usd": 0.0307,
+          "fee_per_tvl_24h": 5.16
+        },
+        {
+          "ts": "2026-05-23T18:25:48.724Z",
+          "active_bin": -408,
+          "pnl_pct": 0.91,
+          "unclaimed_fees_usd": 0.0306,
+          "fee_per_tvl_24h": 5.07
+        },
+        {
+          "ts": "2026-05-23T18:26:19.845Z",
+          "active_bin": -408,
+          "pnl_pct": 0.84,
+          "unclaimed_fees_usd": 0.0306,
+          "fee_per_tvl_24h": 4.99
+        },
+        {
+          "ts": "2026-05-23T18:26:48.979Z",
+          "active_bin": -407,
+          "pnl_pct": 0.86,
+          "unclaimed_fees_usd": 0.0306,
+          "fee_per_tvl_24h": 4.91
+        },
+        {
+          "ts": "2026-05-23T18:27:18.974Z",
+          "active_bin": -407,
+          "pnl_pct": 0.84,
+          "unclaimed_fees_usd": 0.0306,
+          "fee_per_tvl_24h": 4.83
+        },
+        {
+          "ts": "2026-05-23T18:27:49.697Z",
+          "active_bin": -406,
+          "pnl_pct": 0.78,
+          "unclaimed_fees_usd": 0.0306,
+          "fee_per_tvl_24h": 4.75
+        },
+        {
+          "ts": "2026-05-23T18:28:19.520Z",
+          "active_bin": -406,
+          "pnl_pct": 0.9,
+          "unclaimed_fees_usd": 0.0306,
+          "fee_per_tvl_24h": 4.68
+        },
+        {
+          "ts": "2026-05-23T18:28:48.954Z",
+          "active_bin": -405,
+          "pnl_pct": 0.94,
+          "unclaimed_fees_usd": 0.0306,
+          "fee_per_tvl_24h": 4.61
+        },
+        {
+          "ts": "2026-05-23T18:29:19.090Z",
+          "active_bin": -406,
+          "pnl_pct": 0.61,
+          "unclaimed_fees_usd": 0.0305,
+          "fee_per_tvl_24h": 4.54
+        },
+        {
+          "ts": "2026-05-23T18:29:19.571Z",
+          "active_bin": -406,
+          "pnl_pct": 0.61,
+          "unclaimed_fees_usd": 0.0305,
+          "fee_per_tvl_24h": 4.54
+        }
+      ],
+      "upper_oor_fee_extensions": 0,
+      "out_of_range_direction": "upper"
+    },
+    "8UenEqG5dspke8v7NQoPuWusWPpiuiSk5k6S1nPzD9Pr": {
+      "position": "8UenEqG5dspke8v7NQoPuWusWPpiuiSk5k6S1nPzD9Pr",
+      "pool": "2FMA5vAhYX59tibV45uhUg9XrYmrKh2x3KRG5BuhgGgk",
+      "pool_name": "TOLYBOT-SOL",
+      "strategy": "bid_ask",
+      "bin_range": {
+        "min": -441,
+        "max": -406,
+        "bins_below": 35,
+        "bins_above": 0
+      },
+      "amount_sol": 0.35,
+      "amount_x": 0,
+      "active_bin_at_deploy": -406,
+      "management_band": "B",
+      "management_band_config": {
+        "key": "B",
+        "maxVolatility": 3,
+        "trailingTriggerPct": 2.5,
+        "trailingDropPct": 1.25,
+        "upperOorWaitMinutes": 5,
+        "lowerOorWaitMinutes": 30,
+        "pumpedHarvestMinPnlPct": 1.5
+      },
+      "fee_tvl_ratio": 0.4586,
+      "initial_fee_tvl_24h": 0.4586,
+      "organic_score": 75,
+      "mcap": 540290,
+      "token_age_hours": 165,
+      "top10_pct": null,
+      "bot_holders_pct": null,
+      "bundler_pct": null,
+      "velocity_5m_pct": 0,
+      "acceleration_1m_pct": 0,
+      "max_volume_share_pct": 0,
+      "fragility_score": 12,
+      "fragility_level": "normal",
+      "fragility_reasons": [
+        "smallcap"
+      ],
+      "screening_band": "B",
+      "signal_snapshot": {
+        "base_mint": "FjgXCL8ov5BkvZGoY2QthvhUmx82mVkSmhni6nCJpump",
+        "gmgn_score": null,
+        "active_tvl": 19163,
+        "open_positions": 83,
+        "organic_score": 75,
+        "fee_tvl_ratio": 0.4586,
+        "fee_active_tvl_ratio": 0.4586,
+        "volume": 8698,
+        "mcap": 540290,
+        "holder_count": 5150,
+        "holders": null,
+        "smart_wallets_present": null,
+        "smart_wallet_count": null,
+        "discord_active": null,
+        "narrative_quality": "present",
+        "narrative_confidence": null,
+        "x_narrative_score": null,
+        "volatility": 2.6704,
+        "fragility_level": "fast",
+        "fragility_score": 32,
+        "lpagent_confidence": null,
+        "token_age_hours": 165,
+        "screening_band": "B",
+        "funnel_reasons": [
+          "LPAgent strong signal with deep cohort (20), positive ROI 22.08%, top LPers harvesting meaningful fees",
+          "Fees 198.09 SOL solid — passes hard gate",
+          "Organic score 75, volume $8698 reasonable for TVL",
+          "Smart money buy tag, dex_screener_paid — external signal"
+        ],
+        "funnel_risks": [
+          "X narrative unavailable — fail-open bypass, no live X signal",
+          "Fragility fast — tight range required, volatile pool",
+          "Pool memory: 3/6 OOR cycles, avg PnL only 0.79% — prior deploy underwhelming",
+          "No smart wallets present (0) — no whale confirmation"
+        ],
+        "x_unavailable_reason": "missing bearer token",
+        "band": "B"
+      },
+      "deployed_at": "2026-05-23T19:26:18.160Z",
+      "deploy_source": "auto",
+      "auto_close_disabled": false,
+      "stop_loss_warned_at": null,
+      "out_of_range_since": null,
+      "last_claim_at": null,
+      "total_fees_claimed_usd": 0,
+      "rebalance_count": 0,
+      "closed": true,
+      "closed_at": "2026-05-23T20:27:57.081Z",
+      "notes": [
+        "Auto-closed during state sync (not found on-chain)",
+        "Closed at 2026-05-23T20:27:57.081Z: Low yield: fee/TVL 1.18% < min 7% (age: 61m)"
+      ],
+      "peak_pnl_pct": 0.18,
+      "pending_peak_pnl_pct": null,
+      "pending_peak_started_at": null,
+      "pending_trailing_current_pnl_pct": null,
+      "pending_trailing_peak_pnl_pct": null,
+      "pending_trailing_drop_pct": null,
+      "pending_trailing_started_at": null,
+      "confirmed_trailing_exit_reason": null,
+      "confirmed_trailing_exit_until": null,
+      "trailing_active": false,
+      "lower_bounce_touched_at": null,
+      "lower_bounce_touch_bin": null,
+      "smart_wallet_count": null,
+      "narrative_confidence": null,
+      "x_unavailable_reason": "missing bearer token",
+      "active_tvl_at_deploy": 19163,
+      "volume_at_deploy": 8698,
+      "deploy_thesis_reasons": [
+        "LPAgent strong signal with deep cohort (20), positive ROI 22.08%, top LPers harvesting meaningful fees",
+        "Fees 198.09 SOL solid — passes hard gate",
+        "Organic score 75, volume $8698 reasonable for TVL",
+        "Smart money buy tag, dex_screener_paid — external signal"
+      ],
+      "deploy_thesis_risks": [
+        "X narrative unavailable — fail-open bypass, no live X signal",
+        "Fragility fast — tight range required, volatile pool",
+        "Pool memory: 3/6 OOR cycles, avg PnL only 0.79% — prior deploy underwhelming",
+        "No smart wallets present (0) — no whale confirmation"
+      ],
+      "snapshots": [
+        {
+          "ts": "2026-05-23T20:22:18.831Z",
+          "active_bin": -409,
+          "pnl_pct": 0.16,
+          "unclaimed_fees_usd": 0.0151,
+          "fee_per_tvl_24h": 1.3
+        },
+        {
+          "ts": "2026-05-23T20:22:48.937Z",
+          "active_bin": -409,
+          "pnl_pct": 0,
+          "unclaimed_fees_usd": 0.015,
+          "fee_per_tvl_24h": 1.29
+        },
+        {
+          "ts": "2026-05-23T20:23:18.917Z",
+          "active_bin": -409,
+          "pnl_pct": -0.09,
+          "unclaimed_fees_usd": 0.015,
+          "fee_per_tvl_24h": 1.28
+        },
+        {
+          "ts": "2026-05-23T20:23:50.111Z",
+          "active_bin": -409,
+          "pnl_pct": -0.08,
+          "unclaimed_fees_usd": 0.015,
+          "fee_per_tvl_24h": 1.27
+        },
+        {
+          "ts": "2026-05-23T20:24:18.872Z",
+          "active_bin": -409,
+          "pnl_pct": -0.05,
+          "unclaimed_fees_usd": 0.015,
+          "fee_per_tvl_24h": 1.26
+        },
+        {
+          "ts": "2026-05-23T20:24:48.879Z",
+          "active_bin": -409,
+          "pnl_pct": -0.1,
+          "unclaimed_fees_usd": 0.015,
+          "fee_per_tvl_24h": 1.24
+        },
+        {
+          "ts": "2026-05-23T20:25:19.105Z",
+          "active_bin": -409,
+          "pnl_pct": -0.08,
+          "unclaimed_fees_usd": 0.015,
+          "fee_per_tvl_24h": 1.23
+        },
+        {
+          "ts": "2026-05-23T20:25:48.889Z",
+          "active_bin": -409,
+          "pnl_pct": -0.03,
+          "unclaimed_fees_usd": 0.015,
+          "fee_per_tvl_24h": 1.22
+        },
+        {
+          "ts": "2026-05-23T20:26:18.974Z",
+          "active_bin": -409,
+          "pnl_pct": 0.01,
+          "unclaimed_fees_usd": 0.015,
+          "fee_per_tvl_24h": 1.21
+        },
+        {
+          "ts": "2026-05-23T20:26:49.053Z",
+          "active_bin": -409,
+          "pnl_pct": -0.14,
+          "unclaimed_fees_usd": 0.015,
+          "fee_per_tvl_24h": 1.2
+        },
+        {
+          "ts": "2026-05-23T20:27:19.254Z",
+          "active_bin": -409,
+          "pnl_pct": -0.04,
+          "unclaimed_fees_usd": 0.015,
+          "fee_per_tvl_24h": 1.19
+        },
+        {
+          "ts": "2026-05-23T20:27:49.371Z",
+          "active_bin": -409,
+          "pnl_pct": -0.06,
+          "unclaimed_fees_usd": 0.015,
+          "fee_per_tvl_24h": 1.18
+        }
+      ],
+      "upper_oor_fee_extensions": 0
+    },
+    "EkXc55y2byY4J6jojkEmzyRJqbS9wfNLkm5ahzUXjCk1": {
+      "position": "EkXc55y2byY4J6jojkEmzyRJqbS9wfNLkm5ahzUXjCk1",
+      "pool": "BGRTiYMPfpfYANXxbAsgTW7KMPt6DTjahEytAZDvFwi3",
+      "pool_name": "RICH-SOL",
+      "strategy": "bid_ask",
+      "bin_range": {
+        "min": -400,
+        "max": -346,
+        "bins_below": 54,
+        "bins_above": 0
+      },
+      "amount_sol": 0.35,
+      "amount_x": 0,
+      "active_bin_at_deploy": -346,
+      "bin_step": 100,
+      "volatility": 3.213,
+      "management_band": "C",
+      "management_band_config": {
+        "key": "C",
+        "trailingTriggerPct": 1,
+        "trailingDropPct": 0.75,
+        "upperOorWaitMinutes": 2,
+        "lowerOorWaitMinutes": 15,
+        "pumpedHarvestMinPnlPct": 1,
+        "fragilityConfirmationDelayMs": 3000
+      },
+      "fee_tvl_ratio": 0.8314,
+      "initial_fee_tvl_24h": 0.8314,
+      "organic_score": 90,
+      "initial_value_usd": 49.49,
+      "mcap": 1983624,
+      "token_age_hours": 24,
+      "top10_pct": null,
+      "bot_holders_pct": null,
+      "bundler_pct": null,
+      "velocity_5m_pct": 0,
+      "acceleration_1m_pct": 0,
+      "max_volume_share_pct": 0,
+      "fragility_score": 20,
+      "fragility_level": "fast",
+      "fragility_reasons": [
+        "early token",
+        "thin TVL"
+      ],
+      "screening_band": "A",
+      "signal_snapshot": {
+        "base_mint": "5hiLgyybrAYPpUwNFa38agfZ8iEtnahWKAPixcfspump",
+        "gmgn_score": null,
+        "active_tvl": 111064,
+        "open_positions": 316,
+        "organic_score": 90,
+        "fee_tvl_ratio": 0.8314,
+        "fee_active_tvl_ratio": 0.8314,
+        "volume": 27813,
+        "mcap": 1983624,
+        "holder_count": 6165,
+        "holders": null,
+        "smart_wallets_present": null,
+        "smart_wallet_count": null,
+        "discord_active": null,
+        "narrative_quality": "present",
+        "narrative_confidence": null,
+        "x_narrative_score": null,
+        "volatility": 3.213,
+        "fragility_level": "normal",
+        "fragility_score": 11,
+        "lpagent_confidence": null,
+        "token_age_hours": 24,
+        "screening_band": "A",
+        "funnel_reasons": [
+          "active_tvl 111064 cleared",
+          "open_positions 316 cleared",
+          "fragility normal",
+          "lpagent strong signal",
+          "discord escalation active"
+        ],
+        "funnel_risks": [
+          "x narrative unavailable (fail-open only)",
+          "token age 24h (early)",
+          "elevated bots 25.82%"
+        ],
+        "x_unavailable_reason": "missing bearer token",
+        "band": "A"
+      },
+      "deployed_at": "2026-05-23T20:56:51.692Z",
+      "deploy_source": "auto",
+      "auto_close_disabled": false,
+      "stop_loss_warned_at": null,
+      "out_of_range_since": "2026-05-23T20:59:49.526Z",
+      "last_claim_at": null,
+      "total_fees_claimed_usd": 0,
+      "rebalance_count": 0,
+      "closed": true,
+      "closed_at": "2026-05-23T21:01:57.520Z",
+      "notes": [
+        "Auto-closed during state sync (not found on-chain)",
+        "Closed at 2026-05-23T21:01:57.520Z: Upper OOR close (Band C): out of range for 2m (limit: 2m)"
+      ],
+      "peak_pnl_pct": 0.55,
+      "pending_peak_pnl_pct": 0.56,
+      "pending_peak_started_at": "2026-05-23T21:01:49.576Z",
+      "pending_trailing_current_pnl_pct": null,
+      "pending_trailing_peak_pnl_pct": null,
+      "pending_trailing_drop_pct": null,
+      "pending_trailing_started_at": null,
+      "confirmed_trailing_exit_reason": null,
+      "confirmed_trailing_exit_until": null,
+      "trailing_active": false,
+      "lower_bounce_touched_at": null,
+      "lower_bounce_touch_bin": null,
+      "smart_wallet_count": null,
+      "narrative_confidence": null,
+      "x_unavailable_reason": "missing bearer token",
+      "active_tvl_at_deploy": 111064,
+      "volume_at_deploy": 27813,
+      "deploy_thesis_reasons": [
+        "active_tvl 111064 cleared",
+        "open_positions 316 cleared",
+        "fragility normal",
+        "lpagent strong signal",
+        "discord escalation active"
+      ],
+      "deploy_thesis_risks": [
+        "x narrative unavailable (fail-open only)",
+        "token age 24h (early)",
+        "elevated bots 25.82%"
+      ],
+      "snapshots": [
+        {
+          "ts": "2026-05-23T20:57:19.876Z",
+          "active_bin": -348,
+          "pnl_pct": -0.04,
+          "unclaimed_fees_usd": 0.0034,
+          "fee_per_tvl_24h": 34.13
+        },
+        {
+          "ts": "2026-05-23T20:57:49.405Z",
+          "active_bin": -348,
+          "pnl_pct": -0.05,
+          "unclaimed_fees_usd": 0.0034,
+          "fee_per_tvl_24h": 16.2
+        },
+        {
+          "ts": "2026-05-23T20:58:19.011Z",
+          "active_bin": -348,
+          "pnl_pct": -0.02,
+          "unclaimed_fees_usd": 0.0034,
+          "fee_per_tvl_24h": 10.86
+        },
+        {
+          "ts": "2026-05-23T20:58:49.017Z",
+          "active_bin": -348,
+          "pnl_pct": -0.07,
+          "unclaimed_fees_usd": 0.0034,
+          "fee_per_tvl_24h": 8.1
+        },
+        {
+          "ts": "2026-05-23T20:59:19.057Z",
+          "active_bin": -348,
+          "pnl_pct": 0.05,
+          "unclaimed_fees_usd": 0.0035,
+          "fee_per_tvl_24h": 6.65
+        },
+        {
+          "ts": "2026-05-23T20:59:49.532Z",
+          "active_bin": -345,
+          "pnl_pct": 0.13,
+          "unclaimed_fees_usd": 0.0071,
+          "fee_per_tvl_24h": 9.61
+        },
+        {
+          "ts": "2026-05-23T21:00:19.060Z",
+          "active_bin": -342,
+          "pnl_pct": 0.53,
+          "unclaimed_fees_usd": 0.0071,
+          "fee_per_tvl_24h": 9.72
+        },
+        {
+          "ts": "2026-05-23T21:00:49.008Z",
+          "active_bin": -342,
+          "pnl_pct": 0.51,
+          "unclaimed_fees_usd": 0.0071,
+          "fee_per_tvl_24h": 8.5
+        },
+        {
+          "ts": "2026-05-23T21:01:20.039Z",
+          "active_bin": -341,
+          "pnl_pct": 0.57,
+          "unclaimed_fees_usd": 0.0071,
+          "fee_per_tvl_24h": 7.55
+        },
+        {
+          "ts": "2026-05-23T21:01:49.579Z",
+          "active_bin": -342,
+          "pnl_pct": 0.56,
+          "unclaimed_fees_usd": 0.0071,
+          "fee_per_tvl_24h": 6.77
+        }
+      ],
+      "upper_oor_fee_extensions": 0,
+      "out_of_range_direction": "upper"
+    },
+    "EW4JxqFtM5NWqxRg9T8fJEgLsL4uDLV5eeiPpo66YUA1": {
+      "position": "EW4JxqFtM5NWqxRg9T8fJEgLsL4uDLV5eeiPpo66YUA1",
+      "pool": "2FMA5vAhYX59tibV45uhUg9XrYmrKh2x3KRG5BuhgGgk",
+      "pool_name": "TOLYBOT-SOL",
+      "strategy": "bid_ask",
+      "bin_range": {
+        "min": -465,
+        "max": -419,
+        "bins_below": 46,
+        "bins_above": 0
+      },
+      "amount_sol": 0.35,
+      "amount_x": 0,
+      "active_bin_at_deploy": -419,
+      "bin_step": 125,
+      "volatility": 2.9048,
+      "management_band": "B",
+      "management_band_config": {
+        "key": "B",
+        "maxVolatility": 3,
+        "trailingTriggerPct": 1.5,
+        "trailingDropPct": 0.75,
+        "upperOorWaitMinutes": 4,
+        "lowerOorWaitMinutes": 30,
+        "pumpedHarvestMinPnlPct": 1.5,
+        "fragilityConfirmationDelayMs": 3000
+      },
+      "fee_tvl_ratio": 0.5276,
+      "initial_fee_tvl_24h": 0.5276,
+      "organic_score": 75,
+      "initial_value_usd": 62.79,
+      "mcap": 489399,
+      "token_age_hours": 168,
+      "top10_pct": null,
+      "bot_holders_pct": null,
+      "bundler_pct": null,
+      "velocity_5m_pct": 0,
+      "acceleration_1m_pct": 0,
+      "max_volume_share_pct": 0,
+      "fragility_score": 32,
+      "fragility_level": "fast",
+      "fragility_reasons": [
+        "smallcap",
+        "thin TVL",
+        "wide bin step"
+      ],
+      "screening_band": "B",
+      "signal_snapshot": {
+        "base_mint": "FjgXCL8ov5BkvZGoY2QthvhUmx82mVkSmhni6nCJpump",
+        "gmgn_score": null,
+        "active_tvl": 17901,
+        "open_positions": 79,
+        "organic_score": 75,
+        "fee_tvl_ratio": 0.5276,
+        "fee_active_tvl_ratio": 0.5276,
+        "volume": 8303,
+        "mcap": 489399,
+        "holder_count": 5155,
+        "holders": null,
+        "smart_wallets_present": null,
+        "smart_wallet_count": null,
+        "discord_active": null,
+        "narrative_quality": "present",
+        "narrative_confidence": null,
+        "x_narrative_score": null,
+        "volatility": 2.9048,
+        "fragility_level": "fast",
+        "fragility_score": 39,
+        "lpagent_confidence": null,
+        "token_age_hours": 168,
+        "screening_band": "B",
+        "funnel_reasons": [
+          "active_tvl $17,901 cleared",
+          "open_positions 79 cleared",
+          "lpagent strong conviction (5)",
+          "fail-open x narrative bypassed",
+          "discord absent"
+        ],
+        "funnel_risks": [
+          "fragility fast - smallcap/thin TVL",
+          "x narrative unavailable",
+          "pool memory: loss last deploy",
+          "win rate 0.5% - poor history"
+        ],
+        "x_unavailable_reason": "missing bearer token",
+        "band": "B"
+      },
+      "deployed_at": "2026-05-23T21:56:17.669Z",
+      "deploy_source": "auto",
+      "auto_close_disabled": false,
+      "stop_loss_warned_at": null,
+      "out_of_range_since": "2026-05-23T22:00:49.447Z",
+      "last_claim_at": null,
+      "total_fees_claimed_usd": 0,
+      "rebalance_count": 0,
+      "closed": true,
+      "closed_at": "2026-05-23T22:05:27.443Z",
+      "notes": [
+        "Auto-closed during state sync (not found on-chain)",
+        "Closed at 2026-05-23T22:05:27.443Z: Upper OOR close (Band B): out of range for 4m (limit: 4m)"
+      ],
+      "peak_pnl_pct": 0.7,
+      "pending_peak_pnl_pct": null,
+      "pending_peak_started_at": null,
+      "pending_trailing_current_pnl_pct": null,
+      "pending_trailing_peak_pnl_pct": null,
+      "pending_trailing_drop_pct": null,
+      "pending_trailing_started_at": null,
+      "confirmed_trailing_exit_reason": null,
+      "confirmed_trailing_exit_until": null,
+      "trailing_active": false,
+      "lower_bounce_touched_at": null,
+      "lower_bounce_touch_bin": null,
+      "smart_wallet_count": null,
+      "narrative_confidence": null,
+      "x_unavailable_reason": "missing bearer token",
+      "active_tvl_at_deploy": 17901,
+      "volume_at_deploy": 8303,
+      "deploy_thesis_reasons": [
+        "active_tvl $17,901 cleared",
+        "open_positions 79 cleared",
+        "lpagent strong conviction (5)",
+        "fail-open x narrative bypassed",
+        "discord absent"
+      ],
+      "deploy_thesis_risks": [
+        "fragility fast - smallcap/thin TVL",
+        "x narrative unavailable",
+        "pool memory: loss last deploy",
+        "win rate 0.5% - poor history"
+      ],
+      "snapshots": [
+        {
+          "ts": "2026-05-23T22:00:19.507Z",
+          "active_bin": -419,
+          "pnl_pct": 0.43,
+          "unclaimed_fees_usd": 0.0003,
+          "fee_per_tvl_24h": 0.31
+        },
+        {
+          "ts": "2026-05-23T22:00:49.450Z",
+          "active_bin": -418,
+          "pnl_pct": 0.44,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.28
+        },
+        {
+          "ts": "2026-05-23T22:01:19.197Z",
+          "active_bin": -418,
+          "pnl_pct": 0.43,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.5
+        },
+        {
+          "ts": "2026-05-23T22:01:49.466Z",
+          "active_bin": -418,
+          "pnl_pct": 0.48,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.46
+        },
+        {
+          "ts": "2026-05-23T22:02:19.041Z",
+          "active_bin": -417,
+          "pnl_pct": 0.56,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.42
+        },
+        {
+          "ts": "2026-05-23T22:02:49.215Z",
+          "active_bin": -418,
+          "pnl_pct": 0.62,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.39
+        },
+        {
+          "ts": "2026-05-23T22:03:19.001Z",
+          "active_bin": -418,
+          "pnl_pct": 0.66,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.36
+        },
+        {
+          "ts": "2026-05-23T22:03:49.404Z",
+          "active_bin": -418,
+          "pnl_pct": 0.7,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.34
+        },
+        {
+          "ts": "2026-05-23T22:04:19.052Z",
+          "active_bin": -418,
+          "pnl_pct": 0.68,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.32
+        },
+        {
+          "ts": "2026-05-23T22:04:49.074Z",
+          "active_bin": -418,
+          "pnl_pct": 0.23,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.3
+        },
+        {
+          "ts": "2026-05-23T22:05:19.524Z",
+          "active_bin": -418,
+          "pnl_pct": 0.61,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.28
+        },
+        {
+          "ts": "2026-05-23T22:05:19.874Z",
+          "active_bin": -418,
+          "pnl_pct": 0.61,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.28
+        }
+      ],
+      "upper_oor_fee_extensions": 0,
+      "out_of_range_direction": "upper"
+    },
+    "3UDcpa6J5iBXxfby8nEueQepAiVPhUvPbaNpbv392Wne": {
+      "position": "3UDcpa6J5iBXxfby8nEueQepAiVPhUvPbaNpbv392Wne",
+      "pool": "BGRTiYMPfpfYANXxbAsgTW7KMPt6DTjahEytAZDvFwi3",
+      "pool_name": "RICH-SOL",
+      "strategy": "bid_ask",
+      "bin_range": {
+        "min": -306,
+        "max": -252,
+        "bins_below": 54,
+        "bins_above": 0
+      },
+      "amount_sol": 0.35,
+      "amount_x": 0,
+      "active_bin_at_deploy": -252,
+      "bin_step": 100,
+      "volatility": 3.213,
+      "management_band": "C",
+      "management_band_config": {
+        "key": "C",
+        "trailingTriggerPct": 1,
+        "trailingDropPct": 0.75,
+        "upperOorWaitMinutes": 2,
+        "lowerOorWaitMinutes": 15,
+        "pumpedHarvestMinPnlPct": 1,
+        "fragilityConfirmationDelayMs": 3000
+      },
+      "fee_tvl_ratio": 0.8314,
+      "initial_fee_tvl_24h": 0.8314,
+      "organic_score": 90,
+      "initial_value_usd": 50.15,
+      "mcap": 1983624,
+      "token_age_hours": 25,
+      "top10_pct": null,
+      "bot_holders_pct": null,
+      "bundler_pct": null,
+      "velocity_5m_pct": 0,
+      "acceleration_1m_pct": 0,
+      "max_volume_share_pct": 0,
+      "fragility_score": 20,
+      "fragility_level": "fast",
+      "fragility_reasons": [
+        "early token",
+        "thin TVL"
+      ],
+      "screening_band": "A",
+      "signal_snapshot": {
+        "base_mint": "5hiLgyybrAYPpUwNFa38agfZ8iEtnahWKAPixcfspump",
+        "gmgn_score": null,
+        "active_tvl": 111064,
+        "open_positions": 316,
+        "organic_score": 90,
+        "fee_tvl_ratio": 0.8314,
+        "fee_active_tvl_ratio": 0.8314,
+        "volume": 27813,
+        "mcap": 1983624,
+        "holder_count": 8123,
+        "holders": null,
+        "smart_wallets_present": null,
+        "smart_wallet_count": null,
+        "discord_active": null,
+        "narrative_quality": "present",
+        "narrative_confidence": null,
+        "x_narrative_score": null,
+        "volatility": 3.213,
+        "fragility_level": "normal",
+        "fragility_score": 11,
+        "lpagent_confidence": null,
+        "token_age_hours": 25,
+        "screening_band": "A",
+        "funnel_reasons": [
+          "active_tvl 111064 cleared",
+          "open_positions 316 cleared",
+          "fragility normal",
+          "lpagent strong cohort",
+          "discord escalation active",
+          "fee_tvl 0.8314 (83.14%) excellent"
+        ],
+        "funnel_risks": [
+          "x narrative unknown (fail-open)",
+          "memory win rate 1%",
+          "OOR 2/3 past cycles",
+          "elevated bots 27.19%"
+        ],
+        "x_unavailable_reason": "missing bearer token",
+        "band": "A"
+      },
+      "deployed_at": "2026-05-23T22:27:01.708Z",
+      "deploy_source": "auto",
+      "auto_close_disabled": false,
+      "stop_loss_warned_at": null,
+      "out_of_range_since": "2026-05-23T22:34:49.080Z",
+      "last_claim_at": null,
+      "total_fees_claimed_usd": 0,
+      "rebalance_count": 0,
+      "closed": true,
+      "closed_at": "2026-05-23T22:37:27.582Z",
+      "notes": [
+        "Auto-closed during state sync (not found on-chain)",
+        "Closed at 2026-05-23T22:37:27.582Z: Upper OOR close (Band C): out of range for 2m (limit: 2m)"
+      ],
+      "peak_pnl_pct": 0.06,
+      "pending_peak_pnl_pct": null,
+      "pending_peak_started_at": null,
+      "pending_trailing_current_pnl_pct": null,
+      "pending_trailing_peak_pnl_pct": null,
+      "pending_trailing_drop_pct": null,
+      "pending_trailing_started_at": null,
+      "confirmed_trailing_exit_reason": null,
+      "confirmed_trailing_exit_until": null,
+      "trailing_active": false,
+      "lower_bounce_touched_at": null,
+      "lower_bounce_touch_bin": null,
+      "smart_wallet_count": null,
+      "narrative_confidence": null,
+      "x_unavailable_reason": "missing bearer token",
+      "active_tvl_at_deploy": 111064,
+      "volume_at_deploy": 27813,
+      "deploy_thesis_reasons": [
+        "active_tvl 111064 cleared",
+        "open_positions 316 cleared",
+        "fragility normal",
+        "lpagent strong cohort",
+        "discord escalation active",
+        "fee_tvl 0.8314 (83.14%) excellent"
+      ],
+      "deploy_thesis_risks": [
+        "x narrative unknown (fail-open)",
+        "memory win rate 1%",
+        "OOR 2/3 past cycles",
+        "elevated bots 27.19%"
+      ],
+      "snapshots": [
+        {
+          "ts": "2026-05-23T22:32:19.028Z",
+          "active_bin": -253,
+          "pnl_pct": 0.05,
+          "unclaimed_fees_usd": 0.0103,
+          "fee_per_tvl_24h": 9.31
+        },
+        {
+          "ts": "2026-05-23T22:32:49.065Z",
+          "active_bin": -253,
+          "pnl_pct": 0.06,
+          "unclaimed_fees_usd": 0.0103,
+          "fee_per_tvl_24h": 8.52
+        },
+        {
+          "ts": "2026-05-23T22:33:19.078Z",
+          "active_bin": -252,
+          "pnl_pct": -0.17,
+          "unclaimed_fees_usd": 0.0106,
+          "fee_per_tvl_24h": 8.04
+        },
+        {
+          "ts": "2026-05-23T22:33:49.439Z",
+          "active_bin": -252,
+          "pnl_pct": 0.04,
+          "unclaimed_fees_usd": 0.0109,
+          "fee_per_tvl_24h": 7.65
+        },
+        {
+          "ts": "2026-05-23T22:34:19.047Z",
+          "active_bin": -252,
+          "pnl_pct": 0.05,
+          "unclaimed_fees_usd": 0.0109,
+          "fee_per_tvl_24h": 7.14
+        },
+        {
+          "ts": "2026-05-23T22:34:49.087Z",
+          "active_bin": -251,
+          "pnl_pct": 0.02,
+          "unclaimed_fees_usd": 0.011,
+          "fee_per_tvl_24h": 6.73
+        },
+        {
+          "ts": "2026-05-23T22:35:19.025Z",
+          "active_bin": -250,
+          "pnl_pct": -0.04,
+          "unclaimed_fees_usd": 0.011,
+          "fee_per_tvl_24h": 6.31
+        },
+        {
+          "ts": "2026-05-23T22:35:49.537Z",
+          "active_bin": -249,
+          "pnl_pct": -0.43,
+          "unclaimed_fees_usd": 0.0109,
+          "fee_per_tvl_24h": 5.92
+        },
+        {
+          "ts": "2026-05-23T22:36:19.057Z",
+          "active_bin": -249,
+          "pnl_pct": -0.54,
+          "unclaimed_fees_usd": 0.0109,
+          "fee_per_tvl_24h": 5.6
+        },
+        {
+          "ts": "2026-05-23T22:36:49.071Z",
+          "active_bin": -249,
+          "pnl_pct": -0.53,
+          "unclaimed_fees_usd": 0.0109,
+          "fee_per_tvl_24h": 5.32
+        },
+        {
+          "ts": "2026-05-23T22:37:19.156Z",
+          "active_bin": -249,
+          "pnl_pct": -0.53,
+          "unclaimed_fees_usd": 0.0109,
+          "fee_per_tvl_24h": 5.06
+        },
+        {
+          "ts": "2026-05-23T22:37:19.504Z",
+          "active_bin": -249,
+          "pnl_pct": -0.53,
+          "unclaimed_fees_usd": 0.0109,
+          "fee_per_tvl_24h": 5.06
+        }
+      ],
+      "upper_oor_fee_extensions": 0,
+      "out_of_range_direction": "upper"
+    },
+    "HPj7gg7XhNSkwcmD1HjMuRqQhhF4FtWvtgmX9fxdGww9": {
+      "position": "HPj7gg7XhNSkwcmD1HjMuRqQhhF4FtWvtgmX9fxdGww9",
+      "pool": "BGRTiYMPfpfYANXxbAsgTW7KMPt6DTjahEytAZDvFwi3",
+      "pool_name": "RICH-SOL",
+      "strategy": "bid_ask",
+      "bin_range": {
+        "min": -303,
+        "max": -263,
+        "bins_below": 40,
+        "bins_above": 0
+      },
+      "amount_sol": 0.35,
+      "amount_x": 0,
+      "active_bin_at_deploy": -263,
+      "bin_step": 100,
+      "volatility": 3.213,
+      "management_band": "C",
+      "management_band_config": {
+        "key": "C",
+        "trailingTriggerPct": 1,
+        "trailingDropPct": 0.75,
+        "upperOorWaitMinutes": 2,
+        "lowerOorWaitMinutes": 15,
+        "pumpedHarvestMinPnlPct": 1,
+        "fragilityConfirmationDelayMs": 3000
+      },
+      "fee_tvl_ratio": 0.8314,
+      "initial_fee_tvl_24h": 0.8314,
+      "organic_score": 90,
+      "initial_value_usd": 60.27,
+      "mcap": 1983624,
+      "token_age_hours": 30,
+      "top10_pct": null,
+      "bot_holders_pct": null,
+      "bundler_pct": null,
+      "velocity_5m_pct": 0,
+      "acceleration_1m_pct": 0,
+      "max_volume_share_pct": 0,
+      "fragility_score": 20,
+      "fragility_level": "fast",
+      "fragility_reasons": [
+        "early token",
+        "thin TVL"
+      ],
+      "screening_band": "A",
+      "signal_snapshot": {
+        "base_mint": "5hiLgyybrAYPpUwNFa38agfZ8iEtnahWKAPixcfspump",
+        "gmgn_score": null,
+        "active_tvl": 111064,
+        "open_positions": 316,
+        "organic_score": 90,
+        "fee_tvl_ratio": 0.8314,
+        "fee_active_tvl_ratio": 0.8314,
+        "volume": 27813,
+        "mcap": 1983624,
+        "holder_count": 8416,
+        "holders": null,
+        "smart_wallets_present": null,
+        "smart_wallet_count": null,
+        "discord_active": null,
+        "narrative_quality": "present",
+        "narrative_confidence": "moderate",
+        "x_narrative_score": null,
+        "volatility": 3.213,
+        "fragility_level": "normal",
+        "fragility_score": 5,
+        "lpagent_confidence": null,
+        "token_age_hours": 30,
+        "screening_band": "A",
+        "funnel_reasons": [
+          "organic=90 — very high organic signal",
+          "active_tvl=111064 cleared",
+          "open_positions=316 cleared",
+          "fragility=normal (not fragile)",
+          "top10=10.89% — excellent holder distribution",
+          "1h +14.37% with 465 net buyers momentum",
+          "deep LP cohort 20 members, +12.96% ROI, harvesting 15.98% fees",
+          "okx rugpull=NO, wash=NO"
+        ],
+        "funnel_risks": [
+          "X narrative unavailable — fail-open bypass used",
+          "memory: 0.5% win rate, 2 past losses on this exact pool",
+          "volatility=3.213 is elevated — range compressed to 40 bins"
+        ],
+        "x_unavailable_reason": "missing bearer token",
+        "band": "A"
+      },
+      "deployed_at": "2026-05-24T02:56:27.887Z",
+      "deploy_source": "auto",
+      "auto_close_disabled": false,
+      "stop_loss_warned_at": null,
+      "out_of_range_since": "2026-05-24T02:57:19.600Z",
+      "last_claim_at": null,
+      "total_fees_claimed_usd": 0,
+      "rebalance_count": 0,
+      "closed": true,
+      "closed_at": "2026-05-24T02:59:29.063Z",
+      "notes": [
+        "Closed at 2026-05-24T02:59:29.063Z: Upper OOR close (Band C): out of range for 2m (limit: 2m)"
+      ],
+      "peak_pnl_pct": 0.04,
+      "pending_peak_pnl_pct": 0.06,
+      "pending_peak_started_at": "2026-05-24T02:59:20.086Z",
+      "pending_trailing_current_pnl_pct": null,
+      "pending_trailing_peak_pnl_pct": null,
+      "pending_trailing_drop_pct": null,
+      "pending_trailing_started_at": null,
+      "confirmed_trailing_exit_reason": null,
+      "confirmed_trailing_exit_until": null,
+      "trailing_active": false,
+      "lower_bounce_touched_at": null,
+      "lower_bounce_touch_bin": null,
+      "smart_wallet_count": null,
+      "narrative_confidence": "moderate",
+      "x_unavailable_reason": "missing bearer token",
+      "active_tvl_at_deploy": 111064,
+      "volume_at_deploy": 27813,
+      "deploy_thesis_reasons": [
+        "organic=90 — very high organic signal",
+        "active_tvl=111064 cleared",
+        "open_positions=316 cleared",
+        "fragility=normal (not fragile)",
+        "top10=10.89% — excellent holder distribution",
+        "1h +14.37% with 465 net buyers momentum",
+        "deep LP cohort 20 members, +12.96% ROI, harvesting 15.98% fees",
+        "okx rugpull=NO, wash=NO"
+      ],
+      "deploy_thesis_risks": [
+        "X narrative unavailable — fail-open bypass used",
+        "memory: 0.5% win rate, 2 past losses on this exact pool",
+        "volatility=3.213 is elevated — range compressed to 40 bins"
+      ],
+      "snapshots": [
+        {
+          "ts": "2026-05-24T02:56:49.460Z",
+          "active_bin": -264,
+          "pnl_pct": 0,
+          "unclaimed_fees_usd": 0,
+          "fee_per_tvl_24h": 0
+        },
+        {
+          "ts": "2026-05-24T02:57:19.604Z",
+          "active_bin": -261,
+          "pnl_pct": -0.01,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 2.81
+        },
+        {
+          "ts": "2026-05-24T02:57:49.459Z",
+          "active_bin": -260,
+          "pnl_pct": 0.03,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 1.8
+        },
+        {
+          "ts": "2026-05-24T02:58:19.460Z",
+          "active_bin": -254,
+          "pnl_pct": 0.05,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 1.32
+        },
+        {
+          "ts": "2026-05-24T02:58:49.634Z",
+          "active_bin": -255,
+          "pnl_pct": 0.07,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 1.04
+        },
+        {
+          "ts": "2026-05-24T02:59:20.088Z",
+          "active_bin": -255,
+          "pnl_pct": 0.06,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.86
+        },
+        {
+          "ts": "2026-05-24T02:59:20.885Z",
+          "active_bin": -255,
+          "pnl_pct": 0.06,
+          "unclaimed_fees_usd": 0.0005,
+          "fee_per_tvl_24h": 0.86
+        }
+      ],
+      "upper_oor_fee_extensions": 0,
+      "out_of_range_direction": "upper"
+    },
+    "FHitQ5KsFcc3VFJ8SAgdpGPhXTSmjemNRWYH9MGENpVk": {
+      "position": "FHitQ5KsFcc3VFJ8SAgdpGPhXTSmjemNRWYH9MGENpVk",
+      "pool": "59M8qFQTPQmER6REVRoSyPagE1nbr2ysym3T4pGBAyic",
+      "pool_name": "GAPLA-SOL",
+      "strategy": "bid_ask",
+      "bin_range": {
+        "min": -555,
+        "max": -512,
+        "bins_below": 43,
+        "bins_above": 0
+      },
+      "amount_sol": 0.35,
+      "amount_x": 0,
+      "active_bin_at_deploy": -512,
+      "volatility": 1.4109,
+      "management_band": "A",
+      "management_band_config": {
+        "key": "A",
+        "maxVolatility": 1.8,
+        "trailingTriggerPct": 4,
+        "trailingDropPct": 1.75,
+        "upperOorWaitMinutes": 9,
+        "lowerOorWaitMinutes": 45,
+        "pumpedHarvestMinPnlPct": 2
+      },
+      "fee_tvl_ratio": 0.4023,
+      "initial_fee_tvl_24h": 0.4023,
+      "organic_score": 70,
+      "mcap": 520860,
+      "token_age_hours": 192,
+      "top10_pct": null,
+      "bot_holders_pct": null,
+      "bundler_pct": null,
+      "velocity_5m_pct": 0,
+      "acceleration_1m_pct": 0,
+      "max_volume_share_pct": 0,
+      "fragility_score": 12,
+      "fragility_level": "normal",
+      "fragility_reasons": [
+        "smallcap"
+      ],
+      "screening_band": "B",
+      "signal_snapshot": {
+        "base_mint": "3y3X6Bk6zpZpaFJ1KYJ7b33HbFM7ip5TqQPYLWJhpump",
+        "gmgn_score": null,
+        "active_tvl": 47182,
+        "open_positions": 121,
+        "organic_score": 70,
+        "fee_tvl_ratio": 0.4023,
+        "fee_active_tvl_ratio": 0.4023,
+        "volume": 9588,
+        "mcap": 520860,
+        "holder_count": 1722,
+        "holders": null,
+        "smart_wallets_present": null,
+        "smart_wallet_count": null,
+        "discord_active": null,
+        "narrative_quality": "present",
+        "narrative_confidence": "weak",
+        "x_narrative_score": null,
+        "volatility": 1.4109,
+        "fragility_level": "fast",
+        "fragility_score": 32,
+        "lpagent_confidence": null,
+        "token_age_hours": 192,
+        "screening_band": "B",
+        "funnel_reasons": [
+          "active_tvl 47182 cleared",
+          "open_positions 121 cleared",
+          "lpagent strong(4)",
+          "fee_tvl 0.40 above floor"
+        ],
+        "funnel_risks": [
+          "x narrative unavailable (fail-open only)",
+          "fragility fast",
+          "no smart wallets present"
+        ],
+        "x_unavailable_reason": "missing bearer token",
+        "band": "B",
+        "fee_pct": 2,
+        "bin_step": 100,
+        "top10_pct": 19.59,
+        "bot_pct": 35.77
+      },
+      "deployed_at": "2026-05-24T05:56:18.696Z",
+      "deploy_source": "auto",
+      "auto_close_disabled": false,
+      "stop_loss_warned_at": null,
+      "out_of_range_since": null,
+      "last_claim_at": null,
+      "total_fees_claimed_usd": 0,
+      "rebalance_count": 0,
+      "closed": true,
+      "closed_at": "2026-05-24T06:57:57.819Z",
+      "notes": [
+        "Auto-closed during state sync (not found on-chain)",
+        "Closed at 2026-05-24T06:57:57.819Z: Low yield: fee/TVL 3.14% < min 7% (age: 61m)"
+      ],
+      "peak_pnl_pct": 0.77,
+      "pending_peak_pnl_pct": null,
+      "pending_peak_started_at": null,
+      "pending_trailing_current_pnl_pct": null,
+      "pending_trailing_peak_pnl_pct": null,
+      "pending_trailing_drop_pct": null,
+      "pending_trailing_started_at": null,
+      "confirmed_trailing_exit_reason": null,
+      "confirmed_trailing_exit_until": null,
+      "trailing_active": false,
+      "lower_bounce_touched_at": null,
+      "lower_bounce_touch_bin": null,
+      "smart_wallet_count": null,
+      "narrative_confidence": "weak",
+      "x_unavailable_reason": "missing bearer token",
+      "active_tvl_at_deploy": 47182,
+      "volume_at_deploy": 9588,
+      "deploy_thesis_reasons": [
+        "active_tvl 47182 cleared",
+        "open_positions 121 cleared",
+        "lpagent strong(4)",
+        "fee_tvl 0.40 above floor"
+      ],
+      "deploy_thesis_risks": [
+        "x narrative unavailable (fail-open only)",
+        "fragility fast",
+        "no smart wallets present"
+      ],
+      "snapshots": [
+        {
+          "ts": "2026-05-24T06:52:20.096Z",
+          "active_bin": -514,
+          "pnl_pct": 0.47,
+          "unclaimed_fees_usd": 0.0384,
+          "fee_per_tvl_24h": 3.28
+        },
+        {
+          "ts": "2026-05-24T06:52:50.651Z",
+          "active_bin": -514,
+          "pnl_pct": 0.41,
+          "unclaimed_fees_usd": 0.0389,
+          "fee_per_tvl_24h": 3.27
+        },
+        {
+          "ts": "2026-05-24T06:53:19.889Z",
+          "active_bin": -514,
+          "pnl_pct": 0.52,
+          "unclaimed_fees_usd": 0.0389,
+          "fee_per_tvl_24h": 3.24
+        },
+        {
+          "ts": "2026-05-24T06:53:49.605Z",
+          "active_bin": -514,
+          "pnl_pct": 0.55,
+          "unclaimed_fees_usd": 0.0389,
+          "fee_per_tvl_24h": 3.21
+        },
+        {
+          "ts": "2026-05-24T06:54:19.796Z",
+          "active_bin": -514,
+          "pnl_pct": 0.42,
+          "unclaimed_fees_usd": 0.0389,
+          "fee_per_tvl_24h": 3.19
+        },
+        {
+          "ts": "2026-05-24T06:54:49.904Z",
+          "active_bin": -513,
+          "pnl_pct": 0.24,
+          "unclaimed_fees_usd": 0.0403,
+          "fee_per_tvl_24h": 3.3
+        },
+        {
+          "ts": "2026-05-24T06:55:19.797Z",
+          "active_bin": -513,
+          "pnl_pct": 0.47,
+          "unclaimed_fees_usd": 0.0404,
+          "fee_per_tvl_24h": 3.27
+        },
+        {
+          "ts": "2026-05-24T06:55:49.385Z",
+          "active_bin": -513,
+          "pnl_pct": 0.49,
+          "unclaimed_fees_usd": 0.0406,
+          "fee_per_tvl_24h": 3.26
+        },
+        {
+          "ts": "2026-05-24T06:56:19.821Z",
+          "active_bin": -513,
+          "pnl_pct": 0.47,
+          "unclaimed_fees_usd": 0.0409,
+          "fee_per_tvl_24h": 3.23
+        },
+        {
+          "ts": "2026-05-24T06:56:49.818Z",
+          "active_bin": -513,
+          "pnl_pct": 0.21,
+          "unclaimed_fees_usd": 0.0403,
+          "fee_per_tvl_24h": 3.23
+        },
+        {
+          "ts": "2026-05-24T06:57:19.821Z",
+          "active_bin": -513,
+          "pnl_pct": 0.28,
+          "unclaimed_fees_usd": 0.0403,
+          "fee_per_tvl_24h": 3.2
+        },
+        {
+          "ts": "2026-05-24T06:57:49.567Z",
+          "active_bin": -513,
+          "pnl_pct": 0.43,
+          "unclaimed_fees_usd": 0.0404,
+          "fee_per_tvl_24h": 3.14
+        }
+      ],
+      "upper_oor_fee_extensions": 0
+    },
+    "H4r4Tad5cT8Xc85JyuHPRwDzU8VgM4MrZPicANtNS8wa": {
+      "position": "H4r4Tad5cT8Xc85JyuHPRwDzU8VgM4MrZPicANtNS8wa",
+      "pool": "5wqpk5RqBtLR61uX2qcwqkotNHZqZfFZv2QbeJsgscif",
+      "pool_name": "Poor-SOL",
+      "strategy": "bid_ask",
+      "bin_range": {
+        "min": -555,
+        "max": -509,
+        "bins_below": 46,
+        "bins_above": 0
+      },
+      "amount_sol": 0.35,
+      "amount_x": 0,
+      "active_bin_at_deploy": -509,
+      "bin_step": 100,
+      "volatility": 3.1145,
+      "management_band": "C",
+      "management_band_config": {
+        "key": "C",
+        "trailingTriggerPct": 1,
+        "trailingDropPct": 0.75,
+        "upperOorWaitMinutes": 2,
+        "lowerOorWaitMinutes": 15,
+        "pumpedHarvestMinPnlPct": 1,
+        "fragilityConfirmationDelayMs": 3000
+      },
+      "fee_tvl_ratio": 0.8847,
+      "initial_fee_tvl_24h": 0.8847,
+      "organic_score": 84,
+      "initial_value_usd": 59.15,
+      "mcap": 534986,
+      "token_age_hours": 14,
+      "top10_pct": null,
+      "bot_holders_pct": null,
+      "bundler_pct": null,
+      "velocity_5m_pct": 0,
+      "acceleration_1m_pct": 0,
+      "max_volume_share_pct": 0,
+      "fragility_score": 37,
+      "fragility_level": "fast",
+      "fragility_reasons": [
+        "smallcap",
+        "young token",
+        "thin TVL"
+      ],
+      "screening_band": "A",
+      "signal_snapshot": {
+        "base_mint": "T1YZcgtG7Co3ZzFyZn5K9CjDeHAdEEMVRVt6FP5pump",
+        "gmgn_score": null,
+        "active_tvl": 54233,
+        "open_positions": 250,
+        "organic_score": 84,
+        "fee_tvl_ratio": 0.8847,
+        "fee_active_tvl_ratio": 0.8847,
+        "volume": 11714,
+        "mcap": 534986,
+        "holder_count": 2460,
+        "holders": null,
+        "smart_wallets_present": null,
+        "smart_wallet_count": null,
+        "discord_active": null,
+        "narrative_quality": "present",
+        "narrative_confidence": "moderate",
+        "x_narrative_score": null,
+        "volatility": 3.1145,
+        "fragility_level": "fast",
+        "fragility_score": 36,
+        "lpagent_confidence": null,
+        "token_age_hours": 14,
+        "screening_band": "A",
+        "funnel_reasons": [
+          "fee_tvl 0.8847 — highest in preloaded set",
+          "organic 84 — strong organic signal",
+          "top10 15.87% — low concentration, no single actor risk",
+          "fail-open X pass — 189 net buyers in last 1h",
+          "discord escalation active"
+        ],
+        "funnel_risks": [
+          "fragility fast(36) — smallcap/young token is fragile",
+          "volatility 3.1145 — high, position may rebalance frequently",
+          "X narrative unavailable — fail-open bypass, not confirmed",
+          "no smart wallets present — no institutional signal"
+        ],
+        "x_unavailable_reason": "missing bearer token",
+        "band": "A"
+      },
+      "deployed_at": "2026-05-24T08:26:25.140Z",
+      "deploy_source": "auto",
+      "auto_close_disabled": false,
+      "stop_loss_warned_at": null,
+      "out_of_range_since": null,
+      "last_claim_at": null,
+      "total_fees_claimed_usd": 0,
+      "rebalance_count": 0,
+      "closed": true,
+      "closed_at": "2026-05-24T09:49:32.276Z",
+      "notes": [
+        "Auto-closed during state sync (not found on-chain)",
+        "Closed at 2026-05-24T09:49:32.276Z: Trailing TP (Band C | fragility fast:37): peak 2.05% → current 1.25% (drop 0.80% >= 0.75%)"
+      ],
+      "peak_pnl_pct": 2.05,
+      "pending_peak_pnl_pct": null,
+      "pending_peak_started_at": null,
+      "pending_trailing_current_pnl_pct": null,
+      "pending_trailing_peak_pnl_pct": null,
+      "pending_trailing_drop_pct": null,
+      "pending_trailing_started_at": null,
+      "confirmed_trailing_exit_reason": null,
+      "confirmed_trailing_exit_until": null,
+      "trailing_active": true,
+      "lower_bounce_touched_at": null,
+      "lower_bounce_touch_bin": null,
+      "smart_wallet_count": null,
+      "narrative_confidence": "moderate",
+      "x_unavailable_reason": "missing bearer token",
+      "active_tvl_at_deploy": 54233,
+      "volume_at_deploy": 11714,
+      "deploy_thesis_reasons": [
+        "fee_tvl 0.8847 — highest in preloaded set",
+        "organic 84 — strong organic signal",
+        "top10 15.87% — low concentration, no single actor risk",
+        "fail-open X pass — 189 net buyers in last 1h",
+        "discord escalation active"
+      ],
+      "deploy_thesis_risks": [
+        "fragility fast(36) — smallcap/young token is fragile",
+        "volatility 3.1145 — high, position may rebalance frequently",
+        "X narrative unavailable — fail-open bypass, not confirmed",
+        "no smart wallets present — no institutional signal"
+      ],
+      "snapshots": [
+        {
+          "ts": "2026-05-24T09:44:19.920Z",
+          "active_bin": -519,
+          "pnl_pct": 2.01,
+          "unclaimed_fees_usd": 0.4919,
+          "fee_per_tvl_24h": 30.13
+        },
+        {
+          "ts": "2026-05-24T09:44:50.064Z",
+          "active_bin": -519,
+          "pnl_pct": 1.99,
+          "unclaimed_fees_usd": 0.4922,
+          "fee_per_tvl_24h": 29.95
+        },
+        {
+          "ts": "2026-05-24T09:45:19.920Z",
+          "active_bin": -518,
+          "pnl_pct": 1.89,
+          "unclaimed_fees_usd": 0.4974,
+          "fee_per_tvl_24h": 30.08
+        },
+        {
+          "ts": "2026-05-24T09:45:49.577Z",
+          "active_bin": -518,
+          "pnl_pct": 1.87,
+          "unclaimed_fees_usd": 0.4975,
+          "fee_per_tvl_24h": 29.9
+        },
+        {
+          "ts": "2026-05-24T09:46:20.102Z",
+          "active_bin": -518,
+          "pnl_pct": 1.84,
+          "unclaimed_fees_usd": 0.4971,
+          "fee_per_tvl_24h": 29.69
+        },
+        {
+          "ts": "2026-05-24T09:46:49.936Z",
+          "active_bin": -518,
+          "pnl_pct": 1.76,
+          "unclaimed_fees_usd": 0.4971,
+          "fee_per_tvl_24h": 29.5
+        },
+        {
+          "ts": "2026-05-24T09:47:20.118Z",
+          "active_bin": -518,
+          "pnl_pct": 1.85,
+          "unclaimed_fees_usd": 0.4973,
+          "fee_per_tvl_24h": 29.32
+        },
+        {
+          "ts": "2026-05-24T09:47:49.626Z",
+          "active_bin": -518,
+          "pnl_pct": 1.79,
+          "unclaimed_fees_usd": 0.4972,
+          "fee_per_tvl_24h": 29.14
+        },
+        {
+          "ts": "2026-05-24T09:48:20.112Z",
+          "active_bin": -518,
+          "pnl_pct": 1.82,
+          "unclaimed_fees_usd": 0.4974,
+          "fee_per_tvl_24h": 28.97
+        },
+        {
+          "ts": "2026-05-24T09:48:49.998Z",
+          "active_bin": -521,
+          "pnl_pct": 1.51,
+          "unclaimed_fees_usd": 0.515,
+          "fee_per_tvl_24h": 29.82
+        },
+        {
+          "ts": "2026-05-24T09:49:19.983Z",
+          "active_bin": -523,
+          "pnl_pct": 1.25,
+          "unclaimed_fees_usd": 0.5345,
+          "fee_per_tvl_24h": 30.76
+        },
+        {
+          "ts": "2026-05-24T09:49:23.862Z",
+          "active_bin": -523,
+          "pnl_pct": 1.25,
+          "unclaimed_fees_usd": 0.5345,
+          "fee_per_tvl_24h": 30.74
+        }
+      ],
+      "upper_oor_fee_extensions": 0,
+      "out_of_range_direction": "upper"
+    },
+    "6odNs9jRUXUgR6cbfRFpuyEpdRU6bKzS3Us1DAmsTphH": {
+      "position": "6odNs9jRUXUgR6cbfRFpuyEpdRU6bKzS3Us1DAmsTphH",
+      "pool": "5wqpk5RqBtLR61uX2qcwqkotNHZqZfFZv2QbeJsgscif",
+      "pool_name": "Poor-SOL",
+      "strategy": "bid_ask",
+      "bin_range": {
+        "min": -554,
+        "max": -519,
+        "bins_below": 35,
+        "bins_above": 0
+      },
+      "amount_sol": 0.35,
+      "amount_x": 0,
+      "active_bin_at_deploy": -519,
+      "bin_step": 100,
+      "volatility": 2.4923,
+      "management_band": "B",
+      "management_band_config": {
+        "key": "B",
+        "maxVolatility": 3,
+        "trailingTriggerPct": 1.5,
+        "trailingDropPct": 0.75,
+        "upperOorWaitMinutes": 4,
+        "lowerOorWaitMinutes": 30,
+        "pumpedHarvestMinPnlPct": 1.5,
+        "fragilityConfirmationDelayMs": 3000
+      },
+      "fee_tvl_ratio": 0.9084,
+      "initial_fee_tvl_24h": 0.9084,
+      "organic_score": 85,
+      "initial_value_usd": 69.3,
+      "mcap": 485447,
+      "token_age_hours": 18,
+      "top10_pct": null,
+      "bot_holders_pct": null,
+      "bundler_pct": null,
+      "velocity_5m_pct": 0,
+      "acceleration_1m_pct": 0,
+      "max_volume_share_pct": 0,
+      "fragility_score": 37,
+      "fragility_level": "fast",
+      "fragility_reasons": [
+        "smallcap",
+        "young token",
+        "thin TVL"
+      ],
+      "screening_band": "A",
+      "signal_snapshot": {
+        "base_mint": "T1YZcgtG7Co3ZzFyZn5K9CjDeHAdEEMVRVt6FP5pump",
+        "gmgn_score": null,
+        "active_tvl": 35980,
+        "open_positions": 179,
+        "organic_score": 85,
+        "fee_tvl_ratio": 0.9084,
+        "fee_active_tvl_ratio": 0.9084,
+        "volume": 10375,
+        "mcap": 485447,
+        "holder_count": 2592,
+        "holders": null,
+        "smart_wallets_present": null,
+        "smart_wallet_count": null,
+        "discord_active": null,
+        "narrative_quality": "present",
+        "narrative_confidence": "strong",
+        "x_narrative_score": null,
+        "volatility": 2.4923,
+        "fragility_level": "fast",
+        "fragility_score": 30,
+        "lpagent_confidence": null,
+        "token_age_hours": 18,
+        "screening_band": "A",
+        "funnel_reasons": [
+          "Strong narrative: specific origin (0xstickman's quadriplegia story), named KOLs (@xSolRayx, @OpenClawAIX) predicted surge",
+          "Good fee/TVL ratio 0.9084, organic score 85",
+          "LP memory: 100% win rate, +1.52% avg PnL from prior deploy",
+          "Fees paid 44.07 SOL clears gate, OKX rugpull=NO wash=NO"
+        ],
+        "funnel_risks": [
+          "Fragility fast(30) — high volatility token, tight range required",
+          "1h price -9.29% — recent dip post-launch",
+          "No smart wallets present",
+          "pump.fun launchpad (higher risk profile)"
+        ],
+        "x_unavailable_reason": "missing bearer token",
+        "band": "A"
+      },
+      "deployed_at": "2026-05-24T12:26:25.856Z",
+      "deploy_source": "auto",
+      "auto_close_disabled": false,
+      "stop_loss_warned_at": null,
+      "out_of_range_since": null,
+      "last_claim_at": null,
+      "total_fees_claimed_usd": 0,
+      "rebalance_count": 0,
+      "closed": true,
+      "closed_at": "2026-05-24T12:41:32.216Z",
+      "notes": [
+        "Auto-closed during state sync (not found on-chain)",
+        "Closed at 2026-05-24T12:41:32.216Z: Trailing TP (Band B | fragility fast:37): peak 1.53% → current 0.46% (drop 1.07% >= 0.75%)"
+      ],
+      "peak_pnl_pct": 1.53,
+      "pending_peak_pnl_pct": null,
+      "pending_peak_started_at": null,
+      "pending_trailing_current_pnl_pct": null,
+      "pending_trailing_peak_pnl_pct": null,
+      "pending_trailing_drop_pct": null,
+      "pending_trailing_started_at": null,
+      "confirmed_trailing_exit_reason": null,
+      "confirmed_trailing_exit_until": null,
+      "trailing_active": true,
+      "lower_bounce_touched_at": null,
+      "lower_bounce_touch_bin": null,
+      "smart_wallet_count": null,
+      "narrative_confidence": "strong",
+      "x_unavailable_reason": "missing bearer token",
+      "active_tvl_at_deploy": 35980,
+      "volume_at_deploy": 10375,
+      "deploy_thesis_reasons": [
+        "Strong narrative: specific origin (0xstickman's quadriplegia story), named KOLs (@xSolRayx, @OpenClawAIX) predicted surge",
+        "Good fee/TVL ratio 0.9084, organic score 85",
+        "LP memory: 100% win rate, +1.52% avg PnL from prior deploy",
+        "Fees paid 44.07 SOL clears gate, OKX rugpull=NO wash=NO"
+      ],
+      "deploy_thesis_risks": [
+        "Fragility fast(30) — high volatility token, tight range required",
+        "1h price -9.29% — recent dip post-launch",
+        "No smart wallets present",
+        "pump.fun launchpad (higher risk profile)"
+      ],
+      "snapshots": [
+        {
+          "ts": "2026-05-24T12:36:20.159Z",
+          "active_bin": -539,
+          "pnl_pct": 0.8,
+          "unclaimed_fees_usd": 0.5022,
+          "fee_per_tvl_24h": 262.61
+        },
+        {
+          "ts": "2026-05-24T12:36:50.119Z",
+          "active_bin": -539,
+          "pnl_pct": 0.03,
+          "unclaimed_fees_usd": 0.5455,
+          "fee_per_tvl_24h": 250.02
+        },
+        {
+          "ts": "2026-05-24T12:37:20.209Z",
+          "active_bin": -539,
+          "pnl_pct": 0.36,
+          "unclaimed_fees_usd": 0.545,
+          "fee_per_tvl_24h": 238.55
+        },
+        {
+          "ts": "2026-05-24T12:37:50.054Z",
+          "active_bin": -539,
+          "pnl_pct": 0.11,
+          "unclaimed_fees_usd": 0.5455,
+          "fee_per_tvl_24h": 228.1
+        },
+        {
+          "ts": "2026-05-24T12:38:20.154Z",
+          "active_bin": -539,
+          "pnl_pct": -0.18,
+          "unclaimed_fees_usd": 0.5454,
+          "fee_per_tvl_24h": 218.5
+        },
+        {
+          "ts": "2026-05-24T12:38:50.105Z",
+          "active_bin": -539,
+          "pnl_pct": 1.14,
+          "unclaimed_fees_usd": 0.5454,
+          "fee_per_tvl_24h": 221.82
+        },
+        {
+          "ts": "2026-05-24T12:39:20.106Z",
+          "active_bin": -539,
+          "pnl_pct": 0.97,
+          "unclaimed_fees_usd": 0.6296,
+          "fee_per_tvl_24h": 213.24
+        },
+        {
+          "ts": "2026-05-24T12:39:50.161Z",
+          "active_bin": -537,
+          "pnl_pct": 1.04,
+          "unclaimed_fees_usd": 0.6444,
+          "fee_per_tvl_24h": 229.32
+        },
+        {
+          "ts": "2026-05-24T12:40:20.145Z",
+          "active_bin": -537,
+          "pnl_pct": 1,
+          "unclaimed_fees_usd": 0.6445,
+          "fee_per_tvl_24h": 221.11
+        },
+        {
+          "ts": "2026-05-24T12:40:50.179Z",
+          "active_bin": -537,
+          "pnl_pct": 1.45,
+          "unclaimed_fees_usd": 0.6443,
+          "fee_per_tvl_24h": 213.52
+        },
+        {
+          "ts": "2026-05-24T12:41:20.160Z",
+          "active_bin": -537,
+          "pnl_pct": 0.46,
+          "unclaimed_fees_usd": 0.645,
+          "fee_per_tvl_24h": 206.45
+        },
+        {
+          "ts": "2026-05-24T12:41:24.095Z",
+          "active_bin": -537,
+          "pnl_pct": 0.46,
+          "unclaimed_fees_usd": 0.645,
+          "fee_per_tvl_24h": 205.53
+        }
+      ],
+      "upper_oor_fee_extensions": 0
+    },
+    "AdkAPJj9RxCuBCkGh77j6V2hJakrhCWqroLFhwbMH19w": {
+      "position": "AdkAPJj9RxCuBCkGh77j6V2hJakrhCWqroLFhwbMH19w",
+      "pool": "2FMA5vAhYX59tibV45uhUg9XrYmrKh2x3KRG5BuhgGgk",
+      "pool_name": "TOLYBOT-SOL",
+      "strategy": "bid_ask",
+      "bin_range": {
+        "min": -434,
+        "max": -391,
+        "bins_below": 43,
+        "bins_above": 0
+      },
+      "amount_sol": 0.35,
+      "amount_x": 0,
+      "active_bin_at_deploy": -391,
+      "bin_step": 125,
+      "volatility": 1.6953,
+      "management_band": "A",
+      "management_band_config": {
+        "key": "A",
+        "maxVolatility": 1.8,
+        "trailingTriggerPct": 4,
+        "trailingDropPct": 1.75,
+        "upperOorWaitMinutes": 9,
+        "lowerOorWaitMinutes": 45,
+        "pumpedHarvestMinPnlPct": 2
+      },
+      "fee_tvl_ratio": 0.2555,
+      "initial_fee_tvl_24h": 0.2555,
+      "organic_score": 79,
+      "mcap": 668475,
+      "token_age_hours": 183,
+      "top10_pct": null,
+      "bot_holders_pct": null,
+      "bundler_pct": null,
+      "velocity_5m_pct": 0,
+      "acceleration_1m_pct": 0,
+      "max_volume_share_pct": 0,
+      "fragility_score": 17,
+      "fragility_level": "normal",
+      "fragility_reasons": [
+        "smallcap",
+        "wide bin step"
+      ],
+      "screening_band": "B",
+      "signal_snapshot": {
+        "base_mint": "FjgXCL8ov5BkvZGoY2QthvhUmx82mVkSmhni6nCJpump",
+        "gmgn_score": null,
+        "active_tvl": 23794,
+        "open_positions": 73,
+        "organic_score": 79,
+        "fee_tvl_ratio": 0.2555,
+        "fee_active_tvl_ratio": 0.2555,
+        "volume": 6087,
+        "mcap": 668475,
+        "holder_count": 5120,
+        "holders": null,
+        "smart_wallets_present": null,
+        "smart_wallet_count": null,
+        "discord_active": null,
+        "narrative_quality": "present",
+        "narrative_confidence": "unknown",
+        "x_narrative_score": null,
+        "volatility": 1.6953,
+        "fragility_level": "fast",
+        "fragility_score": 39,
+        "lpagent_confidence": null,
+        "token_age_hours": 183,
+        "screening_band": "B",
+        "funnel_reasons": [
+          "LPAgent strong(5) — deep cohort, 22.08% ROI, top LPers harvest 20.53% fees",
+          "active_tvl $23,794 clears floor",
+          "open_positions 73 — adequate range coverage",
+          "organic 79 — strong organic score",
+          "fee_tvl 0.2555 above evolving floor 0.07",
+          "fail-open enabled: x unknown passed on structural grounds only"
+        ],
+        "funnel_risks": [
+          "fragility fast(39) — high decay risk",
+          "mcap $668K — smallcap, thin TVL",
+          "1h price -10.84% — recent dump",
+          "pool memory: 3 deploys, avg PnL +0.29%, win rate 0.67% — low yield",
+          "band B — marginal pass, not a conviction pick",
+          "discord absent — no community signal"
+        ],
+        "x_unavailable_reason": "missing bearer token",
+        "band": "B"
+      },
+      "deployed_at": "2026-05-24T13:26:28.359Z",
+      "deploy_source": "auto",
+      "auto_close_disabled": false,
+      "stop_loss_warned_at": null,
+      "out_of_range_since": "2026-05-24T13:55:48.835Z",
+      "last_claim_at": null,
+      "total_fees_claimed_usd": 0,
+      "rebalance_count": 0,
+      "closed": true,
+      "closed_at": "2026-05-24T14:06:01.570Z",
+      "notes": [
+        "Auto-closed during state sync (not found on-chain)",
+        "Closed at 2026-05-24T14:06:01.570Z: Upper OOR close (Band A): out of range for 10m (limit: 9m)"
+      ],
+      "peak_pnl_pct": 0,
+      "pending_peak_pnl_pct": null,
+      "pending_peak_started_at": null,
+      "pending_trailing_current_pnl_pct": null,
+      "pending_trailing_peak_pnl_pct": null,
+      "pending_trailing_drop_pct": null,
+      "pending_trailing_started_at": null,
+      "confirmed_trailing_exit_reason": null,
+      "confirmed_trailing_exit_until": null,
+      "trailing_active": false,
+      "lower_bounce_touched_at": null,
+      "lower_bounce_touch_bin": null,
+      "smart_wallet_count": null,
+      "narrative_confidence": "unknown",
+      "x_unavailable_reason": "missing bearer token",
+      "active_tvl_at_deploy": 23794,
+      "volume_at_deploy": 6087,
+      "deploy_thesis_reasons": [
+        "LPAgent strong(5) — deep cohort, 22.08% ROI, top LPers harvest 20.53% fees",
+        "active_tvl $23,794 clears floor",
+        "open_positions 73 — adequate range coverage",
+        "organic 79 — strong organic score",
+        "fee_tvl 0.2555 above evolving floor 0.07",
+        "fail-open enabled: x unknown passed on structural grounds only"
+      ],
+      "deploy_thesis_risks": [
+        "fragility fast(39) — high decay risk",
+        "mcap $668K — smallcap, thin TVL",
+        "1h price -10.84% — recent dump",
+        "pool memory: 3 deploys, avg PnL +0.29%, win rate 0.67% — low yield",
+        "band B — marginal pass, not a conviction pick",
+        "discord absent — no community signal"
+      ],
+      "snapshots": [
+        {
+          "ts": "2026-05-24T14:00:20.319Z",
+          "active_bin": -388,
+          "pnl_pct": -0.57,
+          "unclaimed_fees_usd": 0.0076,
+          "fee_per_tvl_24h": 1.07
+        },
+        {
+          "ts": "2026-05-24T14:00:50.512Z",
+          "active_bin": -388,
+          "pnl_pct": -0.45,
+          "unclaimed_fees_usd": 0.0076,
+          "fee_per_tvl_24h": 1.06
+        },
+        {
+          "ts": "2026-05-24T14:01:20.265Z",
+          "active_bin": -388,
+          "pnl_pct": -0.39,
+          "unclaimed_fees_usd": 0.0076,
+          "fee_per_tvl_24h": 1.04
+        },
+        {
+          "ts": "2026-05-24T14:01:50.621Z",
+          "active_bin": -388,
+          "pnl_pct": -0.38,
+          "unclaimed_fees_usd": 0.0076,
+          "fee_per_tvl_24h": 1.03
+        },
+        {
+          "ts": "2026-05-24T14:02:20.520Z",
+          "active_bin": -388,
+          "pnl_pct": -0.45,
+          "unclaimed_fees_usd": 0.0076,
+          "fee_per_tvl_24h": 1.01
+        },
+        {
+          "ts": "2026-05-24T14:02:50.569Z",
+          "active_bin": -388,
+          "pnl_pct": -0.59,
+          "unclaimed_fees_usd": 0.0076,
+          "fee_per_tvl_24h": 1
+        },
+        {
+          "ts": "2026-05-24T14:03:20.828Z",
+          "active_bin": -388,
+          "pnl_pct": -0.52,
+          "unclaimed_fees_usd": 0.0076,
+          "fee_per_tvl_24h": 0.98
+        },
+        {
+          "ts": "2026-05-24T14:03:49.789Z",
+          "active_bin": -388,
+          "pnl_pct": -0.68,
+          "unclaimed_fees_usd": 0.0076,
+          "fee_per_tvl_24h": 0.97
+        },
+        {
+          "ts": "2026-05-24T14:04:20.277Z",
+          "active_bin": -388,
+          "pnl_pct": -0.4,
+          "unclaimed_fees_usd": 0.0076,
+          "fee_per_tvl_24h": 0.96
+        },
+        {
+          "ts": "2026-05-24T14:04:50.448Z",
+          "active_bin": -388,
+          "pnl_pct": -0.59,
+          "unclaimed_fees_usd": 0.0076,
+          "fee_per_tvl_24h": 0.95
+        },
+        {
+          "ts": "2026-05-24T14:05:20.257Z",
+          "active_bin": -388,
+          "pnl_pct": -0.56,
+          "unclaimed_fees_usd": 0.0076,
+          "fee_per_tvl_24h": 0.93
+        },
+        {
+          "ts": "2026-05-24T14:05:49.890Z",
+          "active_bin": -388,
+          "pnl_pct": -0.53,
+          "unclaimed_fees_usd": 0.0076,
+          "fee_per_tvl_24h": 0.92
+        }
+      ],
+      "upper_oor_fee_extensions": 0,
+      "out_of_range_direction": "upper"
+    }
+  },
+  "recentEvents": [
+    {
+      "ts": "2026-05-23T17:56:19.816Z",
+      "action": "deploy",
+      "position": "GaVu7LDBkMDfWWsXv3eNJEwvUS9Q6ugq8B4GuXhv2djN",
+      "pool_name": "TOLYBOT-SOL",
+      "management_band": "B"
+    },
+    {
+      "ts": "2026-05-23T18:29:28.951Z",
+      "action": "close",
+      "position": "GaVu7LDBkMDfWWsXv3eNJEwvUS9Q6ugq8B4GuXhv2djN",
+      "pool_name": "TOLYBOT-SOL",
+      "reason": "Upper OOR close (Band B): out of range for 4m (limit: 4m)"
+    },
+    {
+      "ts": "2026-05-23T19:26:18.160Z",
+      "action": "deploy",
+      "position": "8UenEqG5dspke8v7NQoPuWusWPpiuiSk5k6S1nPzD9Pr",
+      "pool_name": "TOLYBOT-SOL",
+      "management_band": "B"
+    },
+    {
+      "ts": "2026-05-23T20:27:57.082Z",
+      "action": "close",
+      "position": "8UenEqG5dspke8v7NQoPuWusWPpiuiSk5k6S1nPzD9Pr",
+      "pool_name": "TOLYBOT-SOL",
+      "reason": "Low yield: fee/TVL 1.18% < min 7% (age: 61m)"
+    },
+    {
+      "ts": "2026-05-23T20:56:51.692Z",
+      "action": "deploy",
+      "position": "EkXc55y2byY4J6jojkEmzyRJqbS9wfNLkm5ahzUXjCk1",
+      "pool_name": "RICH-SOL",
+      "management_band": "C"
+    },
+    {
+      "ts": "2026-05-23T21:01:57.520Z",
+      "action": "close",
+      "position": "EkXc55y2byY4J6jojkEmzyRJqbS9wfNLkm5ahzUXjCk1",
+      "pool_name": "RICH-SOL",
+      "reason": "Upper OOR close (Band C): out of range for 2m (limit: 2m)"
+    },
+    {
+      "ts": "2026-05-23T21:56:17.669Z",
+      "action": "deploy",
+      "position": "EW4JxqFtM5NWqxRg9T8fJEgLsL4uDLV5eeiPpo66YUA1",
+      "pool_name": "TOLYBOT-SOL",
+      "management_band": "B"
+    },
+    {
+      "ts": "2026-05-23T22:05:27.444Z",
+      "action": "close",
+      "position": "EW4JxqFtM5NWqxRg9T8fJEgLsL4uDLV5eeiPpo66YUA1",
+      "pool_name": "TOLYBOT-SOL",
+      "reason": "Upper OOR close (Band B): out of range for 4m (limit: 4m)"
+    },
+    {
+      "ts": "2026-05-23T22:27:01.708Z",
+      "action": "deploy",
+      "position": "3UDcpa6J5iBXxfby8nEueQepAiVPhUvPbaNpbv392Wne",
+      "pool_name": "RICH-SOL",
+      "management_band": "C"
+    },
+    {
+      "ts": "2026-05-23T22:37:27.582Z",
+      "action": "close",
+      "position": "3UDcpa6J5iBXxfby8nEueQepAiVPhUvPbaNpbv392Wne",
+      "pool_name": "RICH-SOL",
+      "reason": "Upper OOR close (Band C): out of range for 2m (limit: 2m)"
+    },
+    {
+      "ts": "2026-05-24T02:56:27.887Z",
+      "action": "deploy",
+      "position": "HPj7gg7XhNSkwcmD1HjMuRqQhhF4FtWvtgmX9fxdGww9",
+      "pool_name": "RICH-SOL",
+      "management_band": "C"
+    },
+    {
+      "ts": "2026-05-24T02:59:29.063Z",
+      "action": "close",
+      "position": "HPj7gg7XhNSkwcmD1HjMuRqQhhF4FtWvtgmX9fxdGww9",
+      "pool_name": "RICH-SOL",
+      "reason": "Upper OOR close (Band C): out of range for 2m (limit: 2m)"
+    },
+    {
+      "ts": "2026-05-24T05:56:18.696Z",
+      "action": "deploy",
+      "position": "FHitQ5KsFcc3VFJ8SAgdpGPhXTSmjemNRWYH9MGENpVk",
+      "pool_name": "GAPLA-SOL",
+      "management_band": "A"
+    },
+    {
+      "ts": "2026-05-24T06:57:57.819Z",
+      "action": "close",
+      "position": "FHitQ5KsFcc3VFJ8SAgdpGPhXTSmjemNRWYH9MGENpVk",
+      "pool_name": "GAPLA-SOL",
+      "reason": "Low yield: fee/TVL 3.14% < min 7% (age: 61m)"
+    },
+    {
+      "ts": "2026-05-24T08:26:25.140Z",
+      "action": "deploy",
+      "position": "H4r4Tad5cT8Xc85JyuHPRwDzU8VgM4MrZPicANtNS8wa",
+      "pool_name": "Poor-SOL",
+      "management_band": "C"
+    },
+    {
+      "ts": "2026-05-24T09:49:32.276Z",
+      "action": "close",
+      "position": "H4r4Tad5cT8Xc85JyuHPRwDzU8VgM4MrZPicANtNS8wa",
+      "pool_name": "Poor-SOL",
+      "reason": "Trailing TP (Band C | fragility fast:37): peak 2.05% → current 1.25% (drop 0.80% >= 0.75%)"
+    },
+    {
+      "ts": "2026-05-24T12:26:25.856Z",
+      "action": "deploy",
+      "position": "6odNs9jRUXUgR6cbfRFpuyEpdRU6bKzS3Us1DAmsTphH",
+      "pool_name": "Poor-SOL",
+      "management_band": "B"
+    },
+    {
+      "ts": "2026-05-24T12:41:32.216Z",
+      "action": "close",
+      "position": "6odNs9jRUXUgR6cbfRFpuyEpdRU6bKzS3Us1DAmsTphH",
+      "pool_name": "Poor-SOL",
+      "reason": "Trailing TP (Band B | fragility fast:37): peak 1.53% → current 0.46% (drop 1.07% >= 0.75%)"
+    },
+    {
+      "ts": "2026-05-24T13:26:28.359Z",
+      "action": "deploy",
+      "position": "AdkAPJj9RxCuBCkGh77j6V2hJakrhCWqroLFhwbMH19w",
+      "pool_name": "TOLYBOT-SOL",
+      "management_band": "A"
+    },
+    {
+      "ts": "2026-05-24T14:06:01.570Z",
+      "action": "close",
+      "position": "AdkAPJj9RxCuBCkGh77j6V2hJakrhCWqroLFhwbMH19w",
+      "pool_name": "TOLYBOT-SOL",
+      "reason": "Upper OOR close (Band A): out of range for 10m (limit: 9m)"
+    }
+  ],
+  "pendingSweeps": [],
+  "lastUpdated": "2026-05-24T14:07:49.334Z",
+  "_lastBriefingDate": "2026-05-24"
+}

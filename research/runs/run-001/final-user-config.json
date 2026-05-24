@@ -1,0 +1,12 @@
+{
+  "agentId": "agt_7b7cd1817a6d6f867b08e684",
+  "maxPositions": 1,
+  "deployAmountSol": 0.2,
+  "maxDeployAmount": 1,
+  "positionSizePct": 0.25,
+  "minSolToOpen": 0.4,
+  "outOfRangeWaitMinutes": 15,
+  "minFeeActiveTvlRatio": 0.07,
+  "_lastEvolved": "2026-05-24T12:41:32.336Z",
+  "_positionsAtEvolution": 10
+}
