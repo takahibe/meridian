@@ -19,6 +19,10 @@
     "Direct PnL comparison must normalize for position size: use net_sol / deploy_sol per close, not raw PnL.",
     "Compare with scripts/research-compare.js once sample size is met.",
     "hiveMindPublishMode='off' for this profile.",
-    "Telegram alerts arrive on the shared chat with [AUTORES] prefix."
-  ]
+    "Telegram alerts arrive on the shared chat with [AUTORES] prefix.",
+    "2026-05-24: Labeled exploratory by Merlin/Asta. Let it finish to 10 closes, then report; do not move to run-002 or promote settings until reviewed."
+  ],
+  "classification": "exploratory",
+  "promotion_status": "not_eligible_for_direct_promotion",
+  "label_reason": "Config drift: run-001 tests generic outOfRangeWaitMinutes while current Meridian uses band-specific OOR/management keys; use results for signal discovery only, not direct main promotion."
 }
