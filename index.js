@@ -39,6 +39,7 @@ import { getTokenNarrative, getTokenInfo } from "./tools/token.js";
 import { getXNarrativeSignal } from "./tools/x-narrative.js";
 import { assignBand } from "./tools/scoring.js";
 import { stageSignals } from "./signal-tracker.js";
+import { recordCandidateObservation, summarizeRecentPoolTrend } from "./data-collector.js";
 import { getWeightsSummary } from "./signal-weights.js";
 import { bootstrapHiveMind, ensureAgentId, getHiveMindPullMode, isHiveMindEnabled, pullHiveMindLessons, pullHiveMindPresets, registerHiveMindAgent, startHiveMindBackgroundSync } from "./hivemind.js";
 import { appendDecision } from "./decision-log.js";
@@ -1251,6 +1252,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
         ? `  lpagent: ${lpSignal.confidence}(${lpSignal.score})${lpSignal.reasons?.length ? ` | + ${lpSignal.reasons.join("; ")}` : ""}${lpSignal.risks?.length ? ` | - ${lpSignal.risks.join("; ")}` : ""}`
         : null;
       const funnelLine = `  funnel: band=${banding.band} | x=${x?.narrative_confidence ?? "unknown"} | reasons=${(banding.reasons || []).join("; ") || "none"}${banding.risks?.length ? ` | risks=${banding.risks.join("; ")}` : ""}`;
+      const recentTrend = summarizeRecentPoolTrend(pool.pool, getRecentSnapshots(pool.pool, 6));
 
       stageSignals(pool.pool, {
         base_mint: pool.base?.mint || pool.base_mint || ti?.mint || null,
@@ -1275,11 +1277,31 @@ export async function runScreeningCycle({ silent = false } = {}) {
         fragility_score: pool.entry_fragility_score ?? null,
         lpagent_confidence: lpSignal?.confidence ?? null,
         token_age_hours: pool.token_age_hours ?? null,
+        recent_pnl_drift_pct: recentTrend.recent_pnl_drift_pct,
+        recent_active_bin_drift: recentTrend.recent_active_bin_drift,
+        recent_oor_count: recentTrend.recent_oor_count,
+        recent_snapshot_count: recentTrend.recent_snapshot_count,
+        recent_fee_per_tvl_24h: recentTrend.recent_fee_per_tvl_24h,
         screening_band: banding.band,
         funnel_reasons: banding.reasons || [],
         funnel_risks: banding.risks || [],
         x_unavailable_reason: x?.reason ?? null,
       });
+      recordCandidateObservation({
+        cycleId: _screeningLastStartedAt,
+        pool,
+        sw,
+        ti,
+        x,
+        lpSignal,
+        banding,
+        activeBin,
+        recentTrend,
+        selectedForPrompt: true,
+      });
+      const recentTrendLine = recentTrend.recent_snapshot_count >= 2
+        ? `  recent_trend: pnl_drift=${recentTrend.recent_pnl_drift_pct ?? "?"}% over ${recentTrend.recent_snapshot_count} snapshots, active_bin_drift=${recentTrend.recent_active_bin_drift ?? "?"}, oor=${recentTrend.recent_oor_count}/${recentTrend.recent_snapshot_count}`
+        : null;
 
       let block;
       if (pool.gmgn) {
@@ -1289,6 +1311,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
           formatGmgnCandidateForPrompt(pool),
           funnelLine,
           `  fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"}), recommended_bins_below=${pool.recommended_bins_below ?? "?"}${pool.support_bins_below != null ? `, support_bins=${pool.support_bins_below} (${pool.support_source || "support"})` : ""}`,
+          recentTrendLine,
           pvpLine,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
           lpSignalLine,
@@ -1311,6 +1334,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
           okxParts ? `  okx: ${okxParts}` : okxUnavailable ? `  okx: unavailable` : null,
           okxTags ? `  tags: ${okxTags}` : null,
           pool.price_vs_ath_pct != null ? `  ath: price_vs_ath=${pool.price_vs_ath_pct}%${pool.top_cluster_trend ? `, top_cluster=${pool.top_cluster_trend}` : ""}` : null,
+          recentTrendLine,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
           lpSignalLine,
           activeBin != null ? `  active_bin: ${activeBin}` : null,
@@ -1356,7 +1380,10 @@ STEPS:
      fragility_level: "<normal/fast/ultrafragile>",
      token_age_hours: <number>,
      volatility: <number>,
-     organic_score: <number>
+     organic_score: <number>,
+     recent_pnl_drift_pct: <number|null>,
+     recent_active_bin_drift: <number|null>,
+     recent_oor_count: <number|null>
    }
 4. Report in this exact format (no tables, no extra sections):
    🚀 DEPLOYED
@@ -1496,8 +1523,8 @@ export function startCronJobs() {
       await agentLoop(`
 HEALTH CHECK
 
-Summarize the current portfolio health, total fees earned, and performance of all open positions. Recommend any high-level adjustments if needed.
-      `, config.llm.maxSteps, [], "MANAGER");
+Summarize the current portfolio health, total fees earned, and performance of all open positions. Recommend any high-level adjustments if needed. This is read-only: do not close, claim, swap, deploy, or update config.
+      `, config.llm.maxSteps, [], "HEALTH");
     } catch (error) {
       log("cron_error", `Health check failed: ${error.message}`);
     } finally {

@@ -14,6 +14,21 @@ import { config } from "./config.js";
 export function buildSystemPrompt(agentType, portfolio, positions, stateSummary = null, lessons = null, perfSummary = null, weightsSummary = null, decisionSummary = null) {
   const s = config.screening;
 
+  if (agentType === "HEALTH") {
+    return `You are an autonomous DLMM LP agent on Meteora, Solana. Role: HEALTH
+
+This is a read-only portfolio health check. You may inspect balances, positions, PnL, recent performance, and recent decisions. You must not close, claim, swap, deploy, update config, edit lessons, or write notes.
+
+Portfolio: ${JSON.stringify(portfolio)}
+Open Positions: ${JSON.stringify(positions)}
+Performance: ${perfSummary ? JSON.stringify(perfSummary) : "No closed positions yet"}
+
+Write a compact health report: current exposure, fees/PnL, whether anything needs attention, and non-binding high-level adjustments. If there are no positions, say so plainly and do not recommend an action as if you can execute it.
+
+${lessons ? `LESSONS LEARNED:\n${lessons}\n` : ""}${decisionSummary ? `RECENT DECISIONS:\n${decisionSummary}\n` : ""}Timestamp: ${new Date().toISOString()}
+`;
+  }
+
   // MANAGER gets a leaner prompt — positions are pre-loaded in the goal, not repeated here
   if (agentType === "MANAGER") {
     const portfolioCompact = JSON.stringify(portfolio);

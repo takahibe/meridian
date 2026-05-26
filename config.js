@@ -363,6 +363,24 @@ export const config = {
     dailyLossLimitSol:   u.autoresearch?.dailyLossLimitSol   ?? null,
     promptNotes:         u.autoresearch?.promptNotes         ?? null,
     candidateConfigPath: u.autoresearch?.candidateConfigPath ?? null,
+    dataCollectorEnabled: u.autoresearch?.dataCollectorEnabled ?? true,
+    shadowLabelsEnabled:  u.autoresearch?.shadowLabelsEnabled  ?? true,
+    factorVariables: Array.isArray(u.autoresearch?.factorVariables)
+      ? u.autoresearch.factorVariables
+      : [
+          "fee_active_tvl_ratio",
+          "turnover_pct",
+          "volatility",
+          "fragility_score",
+          "price_vs_ath_pct",
+          "recent_pnl_drift_pct",
+          "recent_active_bin_drift",
+          "recent_oor_count",
+          "top_cluster_trend",
+          "bot_holders_pct",
+          "smart_wallet_count",
+          "lpagent_confidence",
+        ],
   },
 
   jupiter: {

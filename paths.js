@@ -30,6 +30,8 @@ export const paths = {
   tokenBlacklistPath:  path.join(dataDir, "token-blacklist.json"),
   devBlocklistPath:    path.join(dataDir, "dev-blocklist.json"),
   signalWeightsPath:   path.join(dataDir, "signal-weights.json"),
+  researchEventsPath:  path.join(dataDir, "research-events.jsonl"),
+  shadowLabelsPath:    path.join(dataDir, "shadow-labels.jsonl"),
   priceHistoryPath:    path.join(dataDir, "price-history.json"),
   xNarrativeCachePath: path.join(dataDir, "x-narrative-cache.json"),
 };

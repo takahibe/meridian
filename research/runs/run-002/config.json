@@ -182,5 +182,15 @@
     "Do not tweak config mid-run; any change becomes run-003.",
     "Comparison script now falls back to pct but refuses auto-promotion without SOL PnL fields."
   ],
-  "created_at": "2026-05-24T14:17:58Z"
+  "created_at": "2026-05-24T14:17:58Z",
+  "shadow_factor_variables": [
+    "recent_pnl_drift_pct",
+    "recent_active_bin_drift",
+    "recent_oor_count",
+    "recent_fee_per_tvl_24h",
+    "price_vs_ath_pct",
+    "fragility_score"
+  ],
+  "next_candidate_variable": "recent_pnl_drift_pct",
+  "next_candidate_hypothesis": "Repeat-pool negative recent PnL drift before deploy predicts degraded EV/tail loss; collect labels before using it as a production filter."
 }

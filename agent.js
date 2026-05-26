@@ -5,6 +5,7 @@ import { executeTool } from "./tools/executor.js";
 import { tools } from "./tools/definitions.js";
 
 const MANAGER_TOOLS  = new Set(["close_position", "claim_fees", "swap_token", "get_position_pnl", "get_my_positions", "get_wallet_balance"]);
+const HEALTH_TOOLS   = new Set(["get_position_pnl", "get_my_positions", "get_wallet_balance", "get_performance_history", "get_recent_decisions"]);
 const SCREENER_TOOLS = new Set(["deploy_position", "get_active_bin", "get_top_candidates", "check_smart_wallets_on_pool", "get_token_holders", "get_token_narrative", "get_x_narrative", "get_token_info", "search_pools", "get_pool_memory", "get_wallet_balance", "get_my_positions"]);
 const GENERAL_INTENT_ONLY_TOOLS = new Set([
   "self_update",
@@ -68,6 +69,7 @@ const INTENT_PATTERNS = [
 ];
 
 function getToolsForRole(agentType, goal = "") {
+  if (agentType === "HEALTH")   return tools.filter(t => HEALTH_TOOLS.has(t.function.name));
   if (agentType === "MANAGER")  return tools.filter(t => MANAGER_TOOLS.has(t.function.name));
   if (agentType === "SCREENER") return tools.filter(t => SCREENER_TOOLS.has(t.function.name));
 

@@ -11,6 +11,7 @@ import { paths } from "./paths.js";
 import { log } from "./logger.js";
 import { getSharedLessonsForPrompt, pushHiveLesson, pushHivePerformanceEvent } from "./hivemind.js";
 import { getTrackedPosition } from "./state.js";
+import { recordShadowLabel } from "./data-collector.js";
 
 const USER_CONFIG_PATH = paths.userConfigPath;
 const LESSONS_FILE = paths.lessonsPath;
@@ -27,6 +28,11 @@ const PERFORMANCE_SIGNAL_FIELDS = [
   "study_win_rate",
   "hive_consensus",
   "volatility",
+  "recent_pnl_drift_pct",
+  "recent_active_bin_drift",
+  "recent_oor_count",
+  "recent_snapshot_count",
+  "recent_fee_per_tvl_24h",
 ];
 const MAX_MANUAL_LESSON_LENGTH = 400;
 
@@ -172,6 +178,7 @@ export async function recordPerformance(perf) {
   };
 
   data.performance.push(entry);
+  recordShadowLabel(entry);
 
   // Derive and store a lesson
   const lesson = derivLesson(entry);

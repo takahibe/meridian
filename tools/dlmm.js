@@ -29,6 +29,7 @@ import { normalizeMint } from "./wallet.js";
 import { computeBinsBelow, getRecommendedBins } from "./bin-policy.js";
 import { appendDecision } from "../decision-log.js";
 import { getAndClearStagedSignals } from "../signal-tracker.js";
+import { recordDeployObservation } from "../data-collector.js";
 import { buildComputeBudgetIx, prependComputeBudget } from "./priority-fee.js";
 
 // ─── Lazy SDK loader ───────────────────────────────────────────
@@ -760,7 +761,7 @@ export async function deployPosition({
     const sizeMultiplier = band === "B" && config.management.bandDeployEnabled
       ? Number(config.management.bandBSizeMultiplier || 0.5)
       : 1;
-    return {
+    const dryRunResult = {
       dry_run: true,
       band: band || resolvedSignalSnapshot.screening_band || null,
       size_multiplier: sizeMultiplier,
@@ -778,6 +779,25 @@ export async function deployPosition({
       },
       message: "DRY RUN — no transaction sent",
     };
+    recordDeployObservation({
+      position: null,
+      pool: pool_address,
+      pool_name,
+      signal_snapshot: {
+        ...resolvedSignalSnapshot,
+        screening_band: band || resolvedSignalSnapshot.screening_band || null,
+      },
+      deploy_result: {
+        pool: pool_address,
+        pool_name,
+        strategy: activeStrategy,
+        amount_x: amount_x || 0,
+        amount_y: requestedAmountY * sizeMultiplier,
+        band: band || resolvedSignalSnapshot.screening_band || null,
+        dry_run: true,
+      },
+    });
+    return dryRunResult;
   }
 
   const strategyMap = {
@@ -913,10 +933,12 @@ export async function deployPosition({
       ) || refreshed?.positions?.find((position) => position.pool === pool_address);
 
       const positionAddress = matching?.position || null;
+      let deployedSignalSnapshot = null;
       if (positionAddress) {
         const signalSnapshot = config.darwin?.enabled
           ? getAndClearStagedSignals(pool_address, baseMint)
           : null;
+        deployedSignalSnapshot = signalSnapshot;
         trackPosition({
           position: positionAddress,
           pool: pool_address,
@@ -961,6 +983,33 @@ export async function deployPosition({
           downside_pct: downside_pct ?? downsideCoveragePct,
           upside_pct: upside_pct ?? upsideCoveragePct,
         },
+      });
+
+      const relayDeployResult = {
+        position: positionAddress,
+        pool: pool_address,
+        pool_name,
+        bin_range: { min: minBinId, max: maxBinId, active: activeBin.binId },
+        range_coverage: {
+          downside_pct: downsideCoveragePct,
+          upside_pct: upsideCoveragePct,
+          width_pct: totalWidthPct,
+          active_price: activePrice,
+        },
+        strategy: activeStrategy,
+        amount_x: finalAmountX,
+        amount_y: finalAmountY,
+        band: band || resolvedSignalSnapshot.screening_band || null,
+      };
+      recordDeployObservation({
+        position: positionAddress,
+        pool: pool_address,
+        pool_name,
+        signal_snapshot: {
+          ...(deployedSignalSnapshot || resolvedSignalSnapshot),
+          screening_band: band || deployedSignalSnapshot?.screening_band || resolvedSignalSnapshot.screening_band || null,
+        },
+        deploy_result: relayDeployResult,
       });
 
       return {
@@ -1114,6 +1163,33 @@ export async function deployPosition({
         downside_pct: downside_pct ?? null,
         upside_pct: upside_pct ?? null,
       },
+    });
+
+    const directDeployResult = {
+      position: newPosition.publicKey.toString(),
+      pool: pool_address,
+      pool_name,
+      bin_range: { min: minBinId, max: maxBinId, active: activeBin.binId },
+      range_coverage: {
+        downside_pct: downsideCoveragePct,
+        upside_pct: upsideCoveragePct,
+        width_pct: totalWidthPct,
+        active_price: activePrice,
+      },
+      strategy: activeStrategy,
+      amount_x: finalAmountX,
+      amount_y: finalAmountY,
+      band: band || resolvedSignalSnapshot.screening_band || null,
+    };
+    recordDeployObservation({
+      position: newPosition.publicKey.toString(),
+      pool: pool_address,
+      pool_name,
+      signal_snapshot: {
+        ...(signalSnapshot || resolvedSignalSnapshot),
+        screening_band: band || signalSnapshot?.screening_band || resolvedSignalSnapshot.screening_band || null,
+      },
+      deploy_result: directDeployResult,
     });
 
     return {

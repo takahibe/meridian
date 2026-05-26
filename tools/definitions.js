@@ -194,7 +194,7 @@ WARNING: This executes a real on-chain transaction. Check DRY_RUN mode.`,
           initial_value_usd: { type: "number", description: "Estimated USD value being deployed" },
           band: { type: "string", enum: ["A", "B"], description: "Confidence funnel band assigned by the screener." },
           narrative_confidence: { type: "string", enum: ["unknown", "absent", "weak", "moderate", "strong"], description: "X narrative confidence captured during screening." },
-          signal_snapshot: { type: "object", description: "Structured signal data from screening for deploy notification. Include: band, funnel_reasons[], funnel_risks[], fragility_score, fragility_level, token_age_hours, volatility, organic_score, active_tvl, open_positions, fee_active_tvl_ratio, mcap. This makes the Telegram deploy alert explain WHY this pool was chosen." }
+          signal_snapshot: { type: "object", description: "Structured signal data from screening for deploy notification and research labels. Include: band, funnel_reasons[], funnel_risks[], fragility_score, fragility_level, token_age_hours, volatility, organic_score, active_tvl, open_positions, fee_active_tvl_ratio, mcap, recent_pnl_drift_pct, recent_active_bin_drift, recent_oor_count. This makes the Telegram deploy alert explain WHY this pool was chosen and gives autoresearch deterministic factors to label later." }
         },
         required: ["pool_address"]
       }
