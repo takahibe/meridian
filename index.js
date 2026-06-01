@@ -845,6 +845,13 @@ export async function runScreeningCycle({ silent = false } = {}) {
           log("screening", `Support range widened ${pool.name}: bins_below ${recommendedBinsBelow} → ${neededBins} to cover ${supportCoverage.source} support (${supportCoverage.interval || "?"})`);
           recommendedBinsBelow = neededBins;
         }
+      } else if (config.strategy.strategy === "bid_ask") {
+        // bid_ask = bounce entry — must have confirmed support (supertrend / BB lower) below range.
+        // No indicator data means we can't verify the lower bin covers support. DATBIHGAH-SOL lost
+        // -13.65% because the range floated above the supertrend. Hard-reject instead of guessing.
+        log("screening", `Support gate: dropped ${pool.name} — no supertrend/BB support data for bid_ask entry (range cannot be validated against support)`);
+        filteredOut.push({ name: pool.name, reason: "no supertrend/BB support data for bid_ask entry" });
+        return false;
       }
       pool.recommended_bins_below = recommendedBinsBelow;
       setRecommendedBins(pool.pool, { bins: recommendedBinsBelow, fragility, volatility: pool.volatility, support: supportCoverage });
