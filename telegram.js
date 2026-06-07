@@ -1,6 +1,7 @@
 import fs from "fs";
 import { paths } from "./paths.js";
 import { log } from "./logger.js";
+import { redact } from "./secrets.js";
 
 const USER_CONFIG_PATH = paths.userConfigPath;
 
@@ -85,10 +86,13 @@ async function postTelegram(method, body) {
     body = { ...body, text: ("[AUTORES] " + body.text).slice(0, 4096) };
   }
   try {
+    const safeBody = typeof body?.text === "string"
+      ? { ...body, text: redact(body.text) }
+      : body;
     const res = await fetch(`${BASE}/${method}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, ...body }),
+      body: JSON.stringify({ chat_id: chatId, ...safeBody }),
     });
     if (!res.ok) {
       const err = await res.text();

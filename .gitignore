@@ -3,13 +3,17 @@ node_modules/
 
 # Environment & secrets
 .env
+.env.raw
 .env.*
-!.env.example
 .envrypt
+!.env.example
+*.pem
 
 # User config (contains RPC URL, wallet key, API keys)
 user-config.json
+user-config*.json
 gmgn-config.json
+*.backup-*
 
 # Runtime state (position tracking, lessons — user-specific)
 state.json

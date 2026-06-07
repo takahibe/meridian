@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { paths } from "./paths.js";
+import { redact } from "./secrets.js";
 
 const LOG_DIR = paths.logDir;
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
@@ -21,7 +22,7 @@ export function log(category, message) {
   if (LEVELS[level] < currentLevel) return;
 
   const timestamp = new Date().toISOString();
-  const line = `[${timestamp}] [${category.toUpperCase()}] ${message}`;
+  const line = redact(`[${timestamp}] [${category.toUpperCase()}] ${message}`);
 
   // Console output
   console.log(line);
@@ -64,12 +65,12 @@ export function logAction(action) {
   const status = action.success ? "✓" : "✗";
   const dur = action.duration_ms != null ? ` (${action.duration_ms}ms)` : "";
   const hint = actionHint(action);
-  console.log(`[${action.tool}] ${status}${hint}${dur}`);
+  console.log(redact(`[${action.tool}] ${status}${hint}${dur}`));
 
   // File: full JSON for audit trail
   const dateStr = timestamp.split("T")[0];
   const actionsFile = path.join(LOG_DIR, `actions-${dateStr}.jsonl`);
-  fs.appendFileSync(actionsFile, JSON.stringify(entry) + "\n");
+  fs.appendFileSync(actionsFile, redact(JSON.stringify(entry)) + "\n");
 }
 
 /**
