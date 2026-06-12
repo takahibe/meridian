@@ -17,6 +17,15 @@ const USER_CONFIG_PATH = paths.userConfigPath;
 const LESSONS_FILE = paths.lessonsPath;
 const MIN_EVOLVE_POSITIONS = 5;   // don't evolve until we have real data
 const MAX_CHANGE_PER_STEP  = 0.20; // never shift a threshold more than 20% at once
+const MIN_RULE_RECORDS     = 10;  // per-rule qualifying records before a threshold may move
+const EVOLVE_WINDOW_MAX_CLOSES = 100; // evolve from recent closes only, never full lifetime
+const DECAY_STEP = 0.10; // zero losers in window → step evolved keys 10% back toward defaults
+// config.js defaults for the evolved keys — decay targets when the window has no losers
+const EVOLVE_DEFAULTS = {
+  minFeeActiveTvlRatio: 0.05,
+  minOrganic: 60,
+  xNarrativeMinConfidence: "moderate",
+};
 const PERFORMANCE_SIGNAL_FIELDS = [
   "organic_score",
   "fee_tvl_ratio",
@@ -349,51 +358,36 @@ function derivLesson(perf) {
 export function evolveThresholds(perfData, config) {
   if (!perfData || perfData.length < MIN_EVOLVE_POSITIONS) return null;
 
-  const winners = perfData.filter((p) => p.pnl_pct > 0);
-  const losers  = perfData.filter((p) => p.pnl_pct < -5);
+  // ── Recency window ────────────────────────────────────────────
+  // Only the last EVOLVE_WINDOW_MAX_CLOSES closes inside the darwin window
+  // count — full-lifetime history lets dead market regimes anchor thresholds.
+  const windowDays = config.darwin?.windowDays ?? 60;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - windowDays);
+  const cutoffISO = cutoff.toISOString();
+  const recent = perfData
+    .filter((p) => {
+      const ts = p.recorded_at || p.closed_at || p.deployed_at;
+      return ts && ts >= cutoffISO;
+    })
+    .slice(-EVOLVE_WINDOW_MAX_CLOSES);
 
-  // Need at least some signal in both directions before adjusting
+  const winners = recent.filter((p) => p.pnl_pct > 0);
+  const losers  = recent.filter((p) => p.pnl_pct < -5);
+
+  // Need at least some signal in both directions before adjusting.
+  // A window with closes but zero losers is also signal: it triggers decay.
+  const decayEligible = recent.length > 0 && losers.length === 0;
   const hasSignal = winners.length >= 2 || losers.length >= 2;
-  if (!hasSignal) return null;
+  if (!hasSignal && !decayEligible) return null;
 
   const changes   = {};
   const rationale = {};
 
-  // ── 1. maxVolatility ─────────────────────────────────────────
-  // If losers tend to cluster at higher volatility → tighten the ceiling.
-  // If winners span higher volatility safely → we can loosen a bit.
-  {
-    const winnerVols = winners.map((p) => p.volatility).filter(isFiniteNum);
-    const loserVols  = losers.map((p) => p.volatility).filter(isFiniteNum);
-    const current    = config.screening.maxVolatility;
-
-    if (loserVols.length >= 2) {
-      // 25th percentile of loser volatilities — this is where things start going wrong
-      const loserP25 = percentile(loserVols, 25);
-      if (loserP25 < current) {
-        // Tighten: new ceiling = loserP25 + a small buffer
-        const target  = loserP25 * 1.15;
-        const newVal  = clamp(nudge(current, target, MAX_CHANGE_PER_STEP), 1.0, 20.0);
-        const rounded = Number(newVal.toFixed(1));
-        if (rounded < current) {
-          changes.maxVolatility = rounded;
-          rationale.maxVolatility = `Losers clustered at volatility ~${loserP25.toFixed(1)} — tightened from ${current} → ${rounded}`;
-        }
-      }
-    } else if (winnerVols.length >= 3 && losers.length === 0) {
-      // All winners so far — loosen conservatively so we don't miss good pools
-      const winnerP75 = percentile(winnerVols, 75);
-      if (winnerP75 > current * 1.1) {
-        const target  = winnerP75 * 1.1;
-        const newVal  = clamp(nudge(current, target, MAX_CHANGE_PER_STEP), 1.0, 20.0);
-        const rounded = Number(newVal.toFixed(1));
-        if (rounded > current) {
-          changes.maxVolatility = rounded;
-          rationale.maxVolatility = `All ${winners.length} positions profitable — loosened from ${current} → ${rounded}`;
-        }
-      }
-    }
-  }
+  // ── (removed) maxVolatility evolution ─────────────────────────
+  // FROZEN: no gate reads the soft config.screening.maxVolatility — the real
+  // ceiling is the static maxVolatilityHard (tools/executor.js, index.js).
+  // Evolving a dead knob only overfits; the key stays in config.js untouched.
 
   // ── 2. minFeeTvlRatio ─────────────────────────────────────────
   // Raise the floor if low-fee pools consistently underperform.
@@ -402,21 +396,22 @@ export function evolveThresholds(perfData, config) {
     const loserFees  = losers.map((p) => p.fee_tvl_ratio).filter(isFiniteNum);
     const current    = config.screening.minFeeActiveTvlRatio;
 
-    if (winnerFees.length >= 2) {
-      // Minimum fee/TVL among winners — we know pools below this don't work for us
-      const minWinnerFee = Math.min(...winnerFees);
-      if (minWinnerFee > current * 1.2) {
-        const target  = minWinnerFee * 0.85; // stay slightly below min winner
-        const newVal  = clamp(nudge(current, target, MAX_CHANGE_PER_STEP), 0.05, 10.0);
+    if (winnerFees.length >= MIN_RULE_RECORDS) {
+      // 10th-percentile fee/TVL among winners — outlier-resistant floor for what works
+      const winnerFeeP10 = percentile(winnerFees, 10);
+      if (winnerFeeP10 > current * 1.2) {
+        const target  = winnerFeeP10 * 0.85; // stay slightly below the winner floor
+        // hard ceiling 0.30 — runaway ratchet here starves screening entirely
+        const newVal  = clamp(nudge(current, target, MAX_CHANGE_PER_STEP), 0.05, 0.30);
         const rounded = Number(newVal.toFixed(2));
         if (rounded > current) {
           changes.minFeeActiveTvlRatio = rounded;
-          rationale.minFeeActiveTvlRatio = `Lowest winner fee_tvl=${minWinnerFee.toFixed(2)} — raised floor from ${current} → ${rounded}`;
+          rationale.minFeeActiveTvlRatio = `Winner p10 fee_tvl=${winnerFeeP10.toFixed(2)} — raised floor from ${current} → ${rounded}`;
         }
       }
     }
 
-    if (loserFees.length >= 2) {
+    if (loserFees.length >= MIN_RULE_RECORDS) {
       // If losers all had high fee/TVL, that's noise (pumps then crash) — don't raise min
       // But if losers had low fee/TVL, raise min
       const maxLoserFee = Math.max(...loserFees);
@@ -424,7 +419,7 @@ export function evolveThresholds(perfData, config) {
         const minWinnerFee = Math.min(...winnerFees);
         if (minWinnerFee > maxLoserFee) {
           const target  = maxLoserFee * 1.2;
-          const newVal  = clamp(nudge(current, target, MAX_CHANGE_PER_STEP), 0.05, 10.0);
+          const newVal  = clamp(nudge(current, target, MAX_CHANGE_PER_STEP), 0.05, 0.30);
           const rounded = Number(newVal.toFixed(2));
           if (rounded > current && !changes.minFeeActiveTvlRatio) {
             changes.minFeeActiveTvlRatio = rounded;
@@ -442,7 +437,7 @@ export function evolveThresholds(perfData, config) {
     const winnerOrganics = winners.map((p) => p.organic_score).filter(isFiniteNum);
     const current        = config.screening.minOrganic;
 
-    if (loserOrganics.length >= 2 && winnerOrganics.length >= 1) {
+    if (loserOrganics.length >= MIN_RULE_RECORDS && winnerOrganics.length >= 1) {
       const avgLoserOrganic  = avg(loserOrganics);
       const avgWinnerOrganic = avg(winnerOrganics);
       // Only raise if there's a clear gap (winners consistently more organic)
@@ -450,7 +445,8 @@ export function evolveThresholds(perfData, config) {
         // Set floor just below worst winner
         const minWinnerOrganic = Math.min(...winnerOrganics);
         const target = Math.max(minWinnerOrganic - 3, current);
-        const newVal = clamp(Math.round(nudge(current, target, MAX_CHANGE_PER_STEP)), 60, 90);
+        // hard ceiling 75 — above that the floor rejects nearly every token
+        const newVal = clamp(Math.round(nudge(current, target, MAX_CHANGE_PER_STEP)), 60, 75);
         if (newVal > current) {
           changes.minOrganic = newVal;
           rationale.minOrganic = `Winner avg organic ${avgWinnerOrganic.toFixed(0)} vs loser avg ${avgLoserOrganic.toFixed(0)} — raised from ${current} → ${newVal}`;
@@ -461,7 +457,7 @@ export function evolveThresholds(perfData, config) {
 
   // ── 4. Funnel tuning ──────────────────────────────────────────
   {
-    const bandB = perfData.filter((p) => p.screening_band === "B");
+    const bandB = recent.filter((p) => p.screening_band === "B");
     const bandBLosses = bandB.filter((p) => (p.pnl_usd ?? 0) < 0);
     const bandBNet = bandB.reduce((sum, p) => sum + (p.pnl_usd || 0), 0);
     const currentMult = Number(config.management.bandBSizeMultiplier ?? 0.5);
@@ -469,7 +465,10 @@ export function evolveThresholds(perfData, config) {
     const bandBLossRate = bandB.length > 0 ? bandBLosses.length / bandB.length : 0;
     const narrativeSteps = ["weak", "moderate", "strong"];
 
-    if (bandB.length >= 5 && bandBNet < 0 && currentMult > 0.2) {
+    // FROZEN unless band deploys are live: the multiplier is only applied when
+    // bandDeployEnabled=true (tools/dlmm.js) — evolving it while disabled just
+    // grinds an inert knob down to its floor.
+    if (config.management.bandDeployEnabled && bandB.length >= 15 && bandBNet < 0 && currentMult > 0.2) {
       const target = Math.max(0.2, currentMult * 0.8);
       const next = Number(clamp(nudge(currentMult, target, MAX_CHANGE_PER_STEP), 0.2, 1).toFixed(2));
       if (next < currentMult) {
@@ -478,13 +477,40 @@ export function evolveThresholds(perfData, config) {
       }
     }
 
-    if (bandB.length >= 5 && bandBNet < 0 && bandBLossRate >= 0.6) {
+    if (bandB.length >= 15 && bandBNet < 0 && bandBLossRate >= 0.6) {
       const idx = narrativeSteps.indexOf(currentNarrative);
       const nextNarrative = idx >= 0 && idx < narrativeSteps.length - 1 ? narrativeSteps[idx + 1] : currentNarrative;
       if (nextNarrative !== currentNarrative) {
         changes.xNarrativeMinConfidence = nextNarrative;
         rationale.xNarrativeMinConfidence = `Band B loss rate ${(bandBLossRate * 100).toFixed(0)}% — tightened X narrative floor from ${currentNarrative} → ${nextNarrative}`;
       }
+    }
+  }
+
+  // ── 5. Symmetric decay ────────────────────────────────────────
+  // Ratchets must not be one-way: with zero losers in the recent window, step
+  // each evolved key back toward its config.js default so thresholds tightened
+  // in a dead regime can relax again. Only unwinds evolution (current above
+  // default) — operator-loosened values are left alone.
+  if (decayEligible) {
+    const s = config.screening;
+    if (changes.minFeeActiveTvlRatio == null && s.minFeeActiveTvlRatio > EVOLVE_DEFAULTS.minFeeActiveTvlRatio) {
+      const next = Number((s.minFeeActiveTvlRatio + (EVOLVE_DEFAULTS.minFeeActiveTvlRatio - s.minFeeActiveTvlRatio) * DECAY_STEP).toFixed(2));
+      if (next < s.minFeeActiveTvlRatio) {
+        changes.minFeeActiveTvlRatio = next;
+        rationale.minFeeActiveTvlRatio = `No losers in ${windowDays}d window — decayed toward default ${EVOLVE_DEFAULTS.minFeeActiveTvlRatio}: ${s.minFeeActiveTvlRatio} → ${next}`;
+      }
+    }
+    if (changes.minOrganic == null && s.minOrganic > EVOLVE_DEFAULTS.minOrganic) {
+      let next = Math.round(s.minOrganic + (EVOLVE_DEFAULTS.minOrganic - s.minOrganic) * DECAY_STEP);
+      if (next >= s.minOrganic) next = s.minOrganic - 1; // integer key: always make progress
+      changes.minOrganic = next;
+      rationale.minOrganic = `No losers in ${windowDays}d window — decayed toward default ${EVOLVE_DEFAULTS.minOrganic}: ${s.minOrganic} → ${next}`;
+    }
+    const currentNarrative = String(s.xNarrativeMinConfidence || "moderate").toLowerCase();
+    if (changes.xNarrativeMinConfidence == null && currentNarrative === "strong") {
+      changes.xNarrativeMinConfidence = EVOLVE_DEFAULTS.xNarrativeMinConfidence;
+      rationale.xNarrativeMinConfidence = `No losers in ${windowDays}d window — relaxed X narrative floor from ${currentNarrative} → ${EVOLVE_DEFAULTS.xNarrativeMinConfidence}`;
     }
   }
 
@@ -504,7 +530,6 @@ export function evolveThresholds(perfData, config) {
 
   // Apply to live config object immediately
   const s = config.screening;
-  if (changes.maxVolatility         != null) s.maxVolatility         = changes.maxVolatility;
   if (changes.minFeeActiveTvlRatio  != null) s.minFeeActiveTvlRatio  = changes.minFeeActiveTvlRatio;
   if (changes.minOrganic            != null) s.minOrganic            = changes.minOrganic;
   if (changes.xNarrativeMinConfidence != null) s.xNarrativeMinConfidence = changes.xNarrativeMinConfidence;
