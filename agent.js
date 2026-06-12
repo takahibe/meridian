@@ -331,6 +331,12 @@ export async function agentLoop(goal, maxSteps = config.llm.maxSteps, sessionHis
           };
         }
 
+        // Lock deploy_position after first attempt regardless of outcome — retrying is never right.
+        // Check-and-set must be synchronous: tool calls in one message execute concurrently
+        // (Promise.all above), so adding after the awaits below would let two parallel
+        // deploy_position calls both pass the duplicate check.
+        if (NO_RETRY_TOOLS.has(functionName)) firedOnce.add(functionName);
+
         // Tag deploys with their source so state.js / management rules can apply manual-grace logic.
         // Caller can force via options.deploySource (e.g. Telegram passes "manual" even when role=SCREENER).
         // Otherwise: GENERAL = user (REPL); MANAGER/SCREENER = autonomous cron.
@@ -349,10 +355,9 @@ export async function agentLoop(goal, maxSteps = config.llm.maxSteps, sessionHis
           step,
         });
 
-        // Lock deploy_position after first attempt regardless of outcome — retrying is never right
         // For close/swap: only lock on success so genuine failures can be retried
-        if (NO_RETRY_TOOLS.has(functionName)) firedOnce.add(functionName);
-        else if (ONCE_PER_SESSION.has(functionName) && result.success === true) firedOnce.add(functionName);
+        // (deploy_position was already locked synchronously above, before execution)
+        if (ONCE_PER_SESSION.has(functionName) && result.success === true) firedOnce.add(functionName);
 
         return {
           role: "tool",
