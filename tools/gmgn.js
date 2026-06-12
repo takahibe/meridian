@@ -182,7 +182,7 @@ function passBasicRankFilter(token) {
   return { pass: reasons.length === 0, reasons };
 }
 
-function analyzeSecurity(security = {}) {
+export function analyzeSecurity(security = {}) {
   const g = config.gmgn;
   const reasons = [];
   if (security.renounced_mint != null && !boolish(security.renounced_mint)) reasons.push("mint not renounced");
@@ -196,6 +196,20 @@ function analyzeSecurity(security = {}) {
   if (num(security.rat_trader_amount_rate) > g.maxRatTraderRate) reasons.push(`insider ${ratioPct(security.rat_trader_amount_rate)}%`);
   if (num(security.sniper_count) > g.maxSniperCount) reasons.push(`snipers ${num(security.sniper_count)}`);
   return { passed: reasons.length === 0, reasons };
+}
+
+// Build the security-shaped object analyzeSecurity expects from the token-level
+// fields the rank payload already carries (no extra network call). Honeypot,
+// wash-trading, renounce and creator-hold status are unavailable in gmgn
+// rank/info payloads — analyzeSecurity skips those checks when fields are absent.
+export function securityFromRankToken(token = {}) {
+  return {
+    rug_ratio: token.rug_ratio,
+    top_10_holder_rate: token.top_10_holder_rate,
+    bundler_trader_amount_rate: token.bundler_rate,
+    rat_trader_amount_rate: token.rat_trader_amount_rate,
+    sniper_count: token.sniper_count,
+  };
 }
 
 function analyzeTokenInfo(info = {}) {
@@ -562,10 +576,18 @@ export async function discoverGmgnPools({ limit = 10, expandPoolsPerToken = fals
   stageCounts.s1 = s1.length;
   log("gmgn", `Stage1 rank: ${ranked.length} → ${s1.length} pass`);
 
-  // ── Stage 2: token info filter ────────────────────────────────────────────
+  // ── Stage 2: security + token info filter ────────────────────────────────
   const s2 = [];
   for (const token of s1) {
     const mint = token.address;
+    // Hard security gate on token-level rank fields (rug ratio, top10, bundler,
+    // insider, snipers) — checked before the info fetch so rejects cost nothing
+    const security = securityFromRankToken(token);
+    const securityCheck = analyzeSecurity(security);
+    if (!securityCheck.passed) {
+      filtered.push({ stage: 2, name: token.symbol || mint, reason: `security: ${securityCheck.reasons.join(", ")}` });
+      continue;
+    }
     try {
       const infoPayload = await gmgnFetch("/v1/token/info", { params: { chain: "sol", address: mint } });
       const info = infoPayload?.data?.data || infoPayload?.data || infoPayload;
@@ -574,14 +596,14 @@ export async function discoverGmgnPools({ limit = 10, expandPoolsPerToken = fals
         filtered.push({ stage: 2, name: token.symbol || mint, reason: infoCheck.reasons.join(", ") });
         continue;
       }
-      s2.push({ token, info, infoCheck });
+      s2.push({ token, info, infoCheck, security });
     } catch (error) {
       log("gmgn", `Stage2 skip ${token.symbol || mint}: ${error.message}`);
       filtered.push({ stage: 2, name: token.symbol || mint, reason: error.message });
     }
   }
   stageCounts.s2 = s2.length;
-  log("gmgn", `Stage2 info: ${s1.length} → ${s2.length} pass`);
+  log("gmgn", `Stage2 security+info: ${s1.length} → ${s2.length} pass`);
 
   // ── Stage 3: holders/traders enrichment (no hard filter) + Meteora pool ──
   const s3 = [];
@@ -590,7 +612,7 @@ export async function discoverGmgnPools({ limit = 10, expandPoolsPerToken = fals
     const msg = String(err?.message || "");
     return /temporarily banned|rate limit|429|Just a moment|cloudflare|challenge/i.test(msg);
   };
-  for (const { token, info, infoCheck } of s2) {
+  for (const { token, info, infoCheck, security } of s2) {
     const mint = token.address;
     try {
       const [holdersResult, tradersResult] = await Promise.allSettled([
@@ -628,7 +650,7 @@ export async function discoverGmgnPools({ limit = 10, expandPoolsPerToken = fals
         filtered.push({ stage: 3, name: token.symbol || mint, reason: `no SOL DLMM pool above tvl>${minTvl}` });
         continue;
       }
-      s3.push({ token, info, infoCheck, holdersCheck, topPools });
+      s3.push({ token, info, infoCheck, security, holdersCheck, topPools });
     } catch (error) {
       log("gmgn", `Stage3 skip ${token.symbol || mint}: ${error.message}`);
       filtered.push({ stage: 3, name: token.symbol || mint, reason: error.message });
@@ -666,7 +688,7 @@ export async function discoverGmgnPools({ limit = 10, expandPoolsPerToken = fals
   // hybrid mode (expandPoolsPerToken): emit up to `poolsPerToken` candidates per token,
   // letting the LLM pick which DLMM pool (bin_step / fee tier) to enter.
   const pools = [];
-  for (const { token, info, infoCheck, holdersCheck, topPools, indicatorSignal } of s4) {
+  for (const { token, info, infoCheck, security, holdersCheck, topPools, indicatorSignal } of s4) {
     if (pools.length >= limit) break;
     const mint = token.address;
     try {
@@ -678,7 +700,6 @@ export async function discoverGmgnPools({ limit = 10, expandPoolsPerToken = fals
         for (let i = 0; i < topPools.length && added < poolsPerToken && pools.length < limit; i++) {
           const pool = topPools[i];
           const poolDetail = details[i];
-          const security = {};
           const candidate = condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAnalysis: infoCheck, holdersAnalysis: holdersCheck, indicatorSignal });
           if (!candidate.pool || !candidate.base?.mint) continue;
           pools.push(candidate);
@@ -693,7 +714,6 @@ export async function discoverGmgnPools({ limit = 10, expandPoolsPerToken = fals
           filtered.push({ stage: 5, name: token.symbol || mint, reason: "pool selection failed" });
           continue;
         }
-        const security = {};
         const candidate = condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAnalysis: infoCheck, holdersAnalysis: holdersCheck, indicatorSignal });
         if (!candidate.pool || !candidate.base?.mint) {
           filtered.push({ stage: 5, name: token.symbol || mint, reason: "incomplete pool mapping" });

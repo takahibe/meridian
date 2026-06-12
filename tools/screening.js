@@ -631,7 +631,7 @@ export async function getTopCandidates({ limit = 10 } = {}) {
     eligible.splice(0, eligible.length, ...filtered);
     if (eligible.length < before) log("dev_blocklist", `Filtered ${before - eligible.length} pool(s) via OKX creator check`);
 
-    // ── HARD GATES (enforced regardless of data source) ──────────────────────
+    // ── HARD GATES (meteora/hybrid only — gmgn mode gates via analyzeSecurity in gmgn.js Stage 2)
     // 1. Rugpull hard filter — deployed rugpulls are catastrophic (MOODANG-style −68%)
     const rugpullBefore = eligible.length;
     eligible.splice(0, eligible.length, ...eligible.filter((p) => {
