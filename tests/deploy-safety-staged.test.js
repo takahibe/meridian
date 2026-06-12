@@ -72,3 +72,12 @@ test("screenerVetoOnly=false rolls back to multi-candidate behavior", () => {
   assert.equal(s.vetoOffReason, null, `flag-off deploy must not be blocked, got: ${s.vetoOffReason}`);
   assert.ok(s.vetoOffDeployed, "with veto-only off, a staged non-selected pool must deploy like before");
 });
+
+test("unstaged pool cannot borrow staged signals via a shared base mint", () => {
+  // Pool-exact staging lookup: in rollback mode a different DLMM pool of the
+  // same token must not inherit the staged pool's bin_step/band/volatility and
+  // slip past the staging gate.
+  const s = summary();
+  assert.match(s.mintBorrowReason ?? "", /not in the current screened candidate set/,
+    "same-mint different-pool deploy must be rejected as unstaged");
+});

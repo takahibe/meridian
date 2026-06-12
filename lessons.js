@@ -495,11 +495,11 @@ export function evolveThresholds(perfData, config) {
   if (decayEligible) {
     const s = config.screening;
     if (changes.minFeeActiveTvlRatio == null && s.minFeeActiveTvlRatio > EVOLVE_DEFAULTS.minFeeActiveTvlRatio) {
-      const next = Number((s.minFeeActiveTvlRatio + (EVOLVE_DEFAULTS.minFeeActiveTvlRatio - s.minFeeActiveTvlRatio) * DECAY_STEP).toFixed(2));
-      if (next < s.minFeeActiveTvlRatio) {
-        changes.minFeeActiveTvlRatio = next;
-        rationale.minFeeActiveTvlRatio = `No losers in ${windowDays}d window — decayed toward default ${EVOLVE_DEFAULTS.minFeeActiveTvlRatio}: ${s.minFeeActiveTvlRatio} → ${next}`;
-      }
+      let next = Number((s.minFeeActiveTvlRatio + (EVOLVE_DEFAULTS.minFeeActiveTvlRatio - s.minFeeActiveTvlRatio) * DECAY_STEP).toFixed(2));
+      // 2-decimal key: a 10% step smaller than 0.005 rounds away — always make progress
+      if (next >= s.minFeeActiveTvlRatio) next = Math.max(EVOLVE_DEFAULTS.minFeeActiveTvlRatio, Number((s.minFeeActiveTvlRatio - 0.01).toFixed(2)));
+      changes.minFeeActiveTvlRatio = next;
+      rationale.minFeeActiveTvlRatio = `No losers in ${windowDays}d window — decayed toward default ${EVOLVE_DEFAULTS.minFeeActiveTvlRatio}: ${s.minFeeActiveTvlRatio} → ${next}`;
     }
     if (changes.minOrganic == null && s.minOrganic > EVOLVE_DEFAULTS.minOrganic) {
       let next = Math.round(s.minOrganic + (EVOLVE_DEFAULTS.minOrganic - s.minOrganic) * DECAY_STEP);

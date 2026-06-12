@@ -129,6 +129,12 @@ const notSelected = await deploy({ pool_address: "poolRunnerUp" });
 //    same staged runner-up deploys fine when the flag is off
 config.screening.screenerVetoOnly = false;
 const vetoOff = await deploy({ pool_address: "poolRunnerUp" });
+
+// 10) Base-mint fallback closed: an UNSTAGED pool sharing a base token with a
+//     staged pool must not borrow the staged pool's signals to pass the staging
+//     gate. Only reachable in rollback mode (veto-only pins the pool anyway).
+stage("poolMintShare", { base_mint: "mint_shared" });
+const mintBorrow = await deploy({ pool_address: "poolOtherSameMint", base_mint: "mint_shared" });
 config.screening.screenerVetoOnly = true;
 
 // Machine-readable summary for the outer test (last stdout line)
@@ -145,5 +151,6 @@ console.log(JSON.stringify({
   notSelectedReason: notSelected?.blocked ? notSelected.reason : null,
   vetoOffDeployed: vetoOff?.mock_deployed === true,
   vetoOffReason: vetoOff?.blocked ? vetoOff.reason : null,
+  mintBorrowReason: mintBorrow?.blocked ? mintBorrow.reason : null,
 }));
 process.exit(0);

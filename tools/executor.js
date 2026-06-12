@@ -726,7 +726,10 @@ async function runSafetyChecks(name, args) {
       // Code-computed ground truth staged during screening — for auto deploys it
       // takes precedence over LLM-echoed args so omitted/forged fields can't
       // silently skip the gates below. Manual deploys keep args-only behavior.
-      const staged = isAuto ? peekStagedSignals(args.pool_address, args.base_mint) : null;
+      // Pool-exact lookup only: the base-mint fallback would let an unstaged
+      // pool that shares a base token with a staged one borrow the other
+      // pool's signals (bin_step etc.) and pass the staging gate.
+      const staged = isAuto ? peekStagedSignals(args.pool_address) : null;
 
       // The pct-range path skips the bins_below floor checks below — keep it as a
       // manual escape hatch only (agent.js tags non-GENERAL deploys as "auto").

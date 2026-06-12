@@ -136,6 +136,15 @@ test("one-way ratchet broken: zero losers in window decays evolved keys toward d
   assert.equal(cfg.screening.minOrganic, result.changes.minOrganic);
 });
 
+test("decay cannot stall near the default: sub-rounding steps still make progress", () => {
+  // At 0.06 the 10% step is 0.001, which toFixed(2) rounds away — without the
+  // always-make-progress floor the key would sit 0.01 above default forever.
+  const cfg = mockConfig({ screening: { minFeeActiveTvlRatio: 0.06 } });
+  const result = evolveThresholds(many(6, { pnl: 10, daysAgo: 2 }), cfg);
+  assert.equal(result.changes.minFeeActiveTvlRatio, 0.05,
+    "0.06 must step down to the 0.05 default, not stall on rounding");
+});
+
 test("inert knob frozen: bandBSizeMultiplier not evolved while bandDeployEnabled=false", () => {
   // The multiplier only affects deploys when bandDeployEnabled=true (dlmm.js);
   // with it off, evolution would just grind the knob to its 0.2 floor.
