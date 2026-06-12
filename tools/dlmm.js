@@ -747,6 +747,9 @@ export async function deployPosition({
 
     activeBinsBelow = Math.max(0, activeBin.binId - lowerBinId);
     activeBinsAbove = Math.max(0, upperBinId - activeBin.binId);
+
+    // Re-apply the safety floor — a tiny downside_pct must not bypass MIN_SAFE_BINS_BELOW
+    activeBinsBelow = Math.max(MIN_SAFE_BINS_BELOW, activeBinsBelow);
   }
 
   const stagedSignalSnapshot = getAndClearStagedSignals(pool_address, baseMint);

@@ -12,7 +12,7 @@ export function compareConfidence(actual, minimum) {
 }
 
 function isXUnavailableFailOpenReason(reason = "") {
-  return /creditsdepleted|credit|billing|payment|required|rate limited|timeout|missing bearer token|http 402|http 429/i.test(String(reason || ""));
+  return /creditsdepleted|credit|billing|payment|required|rate limited|timeout|missing bearer token|http 402|http 429|not checked.*budget guard/i.test(String(reason || ""));
 }
 
 export function assignBand(candidate = {}, signals = {}, cfg = {}) {

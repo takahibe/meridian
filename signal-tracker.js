@@ -83,6 +83,59 @@ export function getAndClearStagedSignals(poolAddress, baseMint = null) {
 }
 
 /**
+ * Peek at staged signals for a pool WITHOUT clearing them.
+ * Used by executor safety checks as code-computed ground truth — the deploy
+ * path still consumes via getAndClearStagedSignals, so peeking must not
+ * interfere with that.
+ * @param {string} poolAddress
+ * @returns {object|null} Signal snapshot or null if not staged
+ */
+export function peekStagedSignals(poolAddress, baseMint = null) {
+  cleanupStale();
+
+  let poolKey = normalizeKey(poolAddress);
+  let data = poolKey ? _staged.get(poolKey) : null;
+
+  if (!data && baseMint) {
+    const baseKey = normalizeKey(baseMint);
+    poolKey = baseKey ? _stagedByBaseMint.get(baseKey) : null;
+    data = poolKey ? _staged.get(poolKey) : null;
+  }
+
+  if (!data) return null;
+  const { staged_at, ...signals } = data;
+  return signals;
+}
+
+// Per-cycle code-selected candidate (scoreCandidate order) — the screener LLM
+// may only confirm or veto this pool, never substitute another one.
+let _selectedPool = null;
+
+/**
+ * Stage the code-selected candidate for the current screening cycle.
+ * Overwrites the previous cycle's selection; same TTL as staged signals.
+ * @param {string} poolAddress
+ */
+export function stageSelectedPool(poolAddress) {
+  const poolKey = normalizeKey(poolAddress);
+  if (!poolKey) return;
+  _selectedPool = { pool: poolKey, staged_at: Date.now() };
+}
+
+/**
+ * Peek at the current cycle's code-selected pool WITHOUT clearing it.
+ * @returns {string|null} Pool address or null if none staged / expired
+ */
+export function peekSelectedPool() {
+  if (!_selectedPool) return null;
+  if (Date.now() - _selectedPool.staged_at > STAGE_TTL_MS) {
+    _selectedPool = null;
+    return null;
+  }
+  return _selectedPool.pool;
+}
+
+/**
  * Get all currently staged pool addresses (for debugging).
  */
 export function getStagedPools() {

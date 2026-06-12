@@ -98,6 +98,35 @@ test("fails open when X is unavailable due depleted credits", () => {
   assert.match(result.risks.join(" "), /x narrative unavailable/i);
 });
 
+test("fails open for top-1 X budget guard stub instead of rejecting the funnel", () => {
+  const result = assignBand(passingCandidate({
+    open_positions: 3,
+    discord_active: false,
+  }), {
+    narrative_confidence: "unknown",
+    x_unavailable_reason: "not checked: top-1 X budget guard",
+    shill_burst_flag: false,
+  }, { ...cfg, xNarrativeFailOpenOnUnavailable: true });
+
+  assert.equal(result.band, "B");
+  assert.match(result.reasons.join(" "), /fail-open enabled/i);
+  assert.match(result.risks.join(" "), /passed only because fail-open is enabled/i);
+});
+
+test("budget guard reason does not fail open a genuine negative X verdict", () => {
+  const result = assignBand(passingCandidate({
+    open_positions: 3,
+    discord_active: false,
+  }), {
+    narrative_confidence: "weak",
+    x_unavailable_reason: "not checked: top-1 X budget guard",
+    shill_burst_flag: false,
+  }, { ...cfg, xNarrativeFailOpenOnUnavailable: true });
+
+  assert.equal(result.band, "REJECT");
+  assert.equal(result.stage, "x_narrative");
+});
+
 test("does not fail open for healthy weak narrative", () => {
   const result = assignBand(passingCandidate({
     open_positions: 3,

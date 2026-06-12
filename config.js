@@ -112,6 +112,8 @@ export const config = {
     maxVolatilityHard: u.maxVolatilityHard ?? 3.5,   // hard ceiling — distinct from soft maxVolatility
     rejectNullVolatility: u.rejectNullVolatility ?? true,  // block GMGN candidates lacking poolDetail.volatility
     screenerFunnelEnabled: u.screenerFunnelEnabled ?? true,
+    screenerVetoOnly: u.screenerVetoOnly ?? true,  // code picks the candidate; LLM only confirms or vetoes
+    xNarrativeEnabled: u.xNarrativeEnabled ?? true,
     xNarrativeMinConfidence: u.xNarrativeMinConfidence ?? "moderate",
     xNarrativeFailOpenOnUnavailable: u.xNarrativeFailOpenOnUnavailable ?? true,
     xApiCacheMinutes: u.xApiCacheMinutes ?? 5,
@@ -318,7 +320,9 @@ export const config = {
 
   // ─── Darwinian Signal Weighting ───────
   darwin: {
-    enabled:        u.darwinEnabled     ?? true,
+    // Frozen by default: signal-weight evolution only runs on an explicit
+    // user-config opt-in, so a regenerated user-config.json can't re-enable it.
+    enabled:        u.darwinEnabled     ?? false,
     windowDays:     u.darwinWindowDays  ?? 60,
     recalcEvery:    u.darwinRecalcEvery ?? 5,    // recalc every N closes
     boostFactor:    u.darwinBoost       ?? 1.05,
@@ -504,6 +508,8 @@ export function reloadScreeningThresholds() {
     if (fresh.maxVolatilityHard!= null) s.maxVolatilityHard= fresh.maxVolatilityHard;
     if (fresh.rejectNullVolatility !== undefined) s.rejectNullVolatility = fresh.rejectNullVolatility;
     if (fresh.screenerFunnelEnabled !== undefined) s.screenerFunnelEnabled = fresh.screenerFunnelEnabled;
+    if (fresh.screenerVetoOnly !== undefined) s.screenerVetoOnly = fresh.screenerVetoOnly;
+    if (fresh.xNarrativeEnabled !== undefined) s.xNarrativeEnabled = fresh.xNarrativeEnabled;
     if (fresh.xNarrativeMinConfidence != null) s.xNarrativeMinConfidence = fresh.xNarrativeMinConfidence;
     if (fresh.xNarrativeFailOpenOnUnavailable !== undefined) s.xNarrativeFailOpenOnUnavailable = fresh.xNarrativeFailOpenOnUnavailable;
     if (fresh.xApiCacheMinutes != null) s.xApiCacheMinutes = fresh.xApiCacheMinutes;

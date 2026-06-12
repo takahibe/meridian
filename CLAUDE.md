@@ -82,6 +82,8 @@ Sets defined in `agent.js:6-7`. If you add a tool, also add it to the relevant s
 | maxBundlersPct | screening | 30 |
 | maxTop10Pct | screening | 60 |
 | blockedLaunchpads | screening | [] |
+| xNarrativeEnabled | screening | true |
+| screenerVetoOnly | screening | true (LLM sees only the code-selected candidate; confirm-or-veto) |
 | deployAmountSol | management | 0.5 |
 | maxDeployAmount | risk | 50 |
 | maxPositions | risk | 3 |
@@ -116,6 +118,9 @@ Before `deploy_position` executes:
 - If `amount_x > 0`: strip `amount_y` and `amount_sol` (tokenX-only deploy — no SOL needed)
 - SOL balance must cover `amount_y + gasReserve` (skipped for tokenX-only)
 - `blockedLaunchpads` enforced in `getTopCandidates()` before LLM sees candidates
+- **Auto deploys** (`deploy_source !== 'manual'`) additionally enforce staged ground truth (signal-tracker.js, 10-min TTL): pool must be in the screened candidate set; staged `bin_step`/`base_mint`/volatility/fragility/band override LLM-echoed args; `amount_y` capped at the staged per-cycle `max_deploy_sol`; with `screenerVetoOnly` on, only the code-selected candidate's pool is deployable
+- `downside_pct`/`upside_pct` are manual-only (auto deploys must use `bins_below`; MIN_SAFE_BINS_BELOW floor applies after pct conversion)
+- GMGN-sourced candidates pass a security hard-gate in `gmgn.js` Stage 2 (rug_ratio, top10, bundler, sniper rates from rank payload); the screening.js HARD GATES block is meteora/hybrid-only
 
 ---
 

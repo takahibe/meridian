@@ -31,20 +31,20 @@ import {
   createLiveMessage,
 } from "./telegram.js";
 import { generateBriefing } from "./briefing.js";
-import { getLastBriefingDate, setLastBriefingDate, getTrackedPosition, getTrackedPositions, setPositionInstruction, updatePnlAndCheckExits, queuePeakConfirmation, resolvePendingPeak, queueTrailingDropConfirmation, resolvePendingTrailingDrop, markSpotAdded, hasSpotBeenAdded, clearSpotAdd } from "./state.js";
+import { getLastBriefingDate, setLastBriefingDate, getTrackedPosition, getTrackedPositions, setPositionInstruction, updatePnlAndCheckExits, queuePeakConfirmation, resolvePendingPeak, queueTrailingDropConfirmation, resolvePendingTrailingDrop, markSpotAdded, hasSpotBeenAdded, clearSpotAdd, recordUpperOorFeeExtension } from "./state.js";
 import { getActiveStrategy } from "./strategy-library.js";
 import { recordPositionSnapshot, recallForPool, addPoolNote, getRecentSnapshots, getTokenLossCount } from "./pool-memory.js";
 import { checkSmartWalletsOnPool } from "./smart-wallets.js";
 import { getTokenNarrative, getTokenInfo } from "./tools/token.js";
 import { getXNarrativeSignal } from "./tools/x-narrative.js";
 import { assignBand } from "./tools/scoring.js";
-import { stageSignals } from "./signal-tracker.js";
+import { stageSignals, stageSelectedPool } from "./signal-tracker.js";
 import { recordCandidateObservation, summarizeRecentPoolTrend } from "./data-collector.js";
 import { getWeightsSummary } from "./signal-weights.js";
 import { bootstrapHiveMind, ensureAgentId, getHiveMindPullMode, isHiveMindEnabled, pullHiveMindLessons, pullHiveMindPresets, registerHiveMindAgent, startHiveMindBackgroundSync } from "./hivemind.js";
 import { appendDecision } from "./decision-log.js";
 import { runWeeklySourceCheck } from "./scripts/weekly-source-check.js";
-import { computeFeeDecayClose, computeLowerDumpVelocityClose } from "./management-rules.js";
+import { computeFeeDecayClose, computeLowerDumpVelocityClose, computeUpperOorFeeExtension, getBandConfigForPosition } from "./management-rules.js";
 
 async function runAutoresearchStartupGuard() {
   const profile = process.env.MERIDIAN_PROFILE;
@@ -142,6 +142,7 @@ let _screeningBusy = false;  // prevents overlapping screening cycles
 let _screeningLastStartedAt = 0; // epoch ms — prevents management from spamming screening
 let _screeningLastFinishedAt = 0; // epoch ms — tracks the last completed screening cycle
 let _pollTriggeredAt = 0; // epoch ms — cooldown for poller-triggered management
+const _closeInFlight = new Set(); // position addresses with a poller emergency close in flight
 let _lastMgmtCycleId = ''; // current cycle ID being processed
 let _lastMgmtCompleted = 0; // epoch ms — last completed cycle for dedupe
 let _lastXApiAlertAt = 0; // epoch ms — debounce X API degradation alerts
@@ -1218,6 +1219,12 @@ export async function runScreeningCycle({ silent = false } = {}) {
       }
     }
 
+    // Code picks the deploy candidate deterministically (scoreCandidate order).
+    // Staged so the executor rejects any other pool when screenerVetoOnly is on —
+    // the LLM is demoted to a qualitative veto on this one candidate.
+    const selected = visiblePassing[0];
+    stageSelectedPool(selected.pool.pool);
+
     const visiblePools = visiblePassing.map(({ pool }) => pool.pool);
     const activeBinByPool = new Map();
     activeBinResults.forEach((result, idx) => {
@@ -1263,6 +1270,8 @@ export async function runScreeningCycle({ silent = false } = {}) {
 
       stageSignals(pool.pool, {
         base_mint: pool.base?.mint || pool.base_mint || ti?.mint || null,
+        bin_step: pool.bin_step ?? null,
+        max_deploy_sol: deployAmount,
         gmgn_score: pool.gmgn_score ?? null,
         active_tvl: pool.active_tvl ?? null,
         open_positions: pool.open_positions ?? null,
@@ -1304,7 +1313,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
         banding,
         activeBin,
         recentTrend,
-        selectedForPrompt: true,
+        selectedForPrompt: config.screening.screenerVetoOnly ? pool.pool === selected.pool.pool : true,
       });
       const recentTrendLine = recentTrend.recent_snapshot_count >= 2
         ? `  recent_trend: pnl_drift=${recentTrend.recent_pnl_drift_pct ?? "?"}% over ${recentTrend.recent_snapshot_count} snapshots, active_bin_drift=${recentTrend.recent_active_bin_drift ?? "?"}, oor=${recentTrend.recent_oor_count}/${recentTrend.recent_snapshot_count}`
@@ -1358,7 +1367,84 @@ export async function runScreeningCycle({ silent = false } = {}) {
 
     let deployAttempted = false;
     let deploySucceeded = false;
-    const { content } = await agentLoop(`
+    // Veto-only goal: code already picked the candidate and computed every deploy
+    // arg — the LLM's only decision is a qualitative veto (narrative quality, PVP
+    // context, smart-wallet read). The executor rejects any other pool/args.
+    const vetoGoal = `
+SCREENING CYCLE — VETO MODE
+${strategyBlock}
+Positions: ${prePositions.total_positions}/${config.risk.maxPositions} | SOL: ${currentBalance.sol.toFixed(3)} | Deploy: ${deployAmount} SOL
+
+The code has already selected this cycle's candidate deterministically and computed all deploy args. Quantitative thresholds are already enforced — do not re-litigate metrics, do not pick another pool, do not change any arg.
+
+SELECTED CANDIDATE:
+${candidateBlocks[0]}
+
+YOUR ONLY DECISION — confirm or veto:
+1. Judge the qualitative read only: narrative quality, PVP context, smart-wallet read, anything in the block that looks like a trap.
+2. To CONFIRM: call deploy_position with EXACTLY these args (any other pool or larger amount is auto-rejected):
+   pool_address: ${selected.pool.pool}
+   strategy: ${config.strategy.strategy}
+   amount_y: ${deployAmount} (amount_x = 0)
+   bins_below: ${selected.pool.recommended_bins_below ?? config.strategy.minBinsBelow}
+   bins_above: 0
+   band: ${selected.banding.band}
+   signal_snapshot: { band, funnel_reasons, funnel_risks, fragility_score, fragility_level, token_age_hours, volatility, organic_score } — copy the values from the candidate block.
+3. After a successful deploy, report in this exact format (no tables, no extra sections):
+   🚀 DEPLOYED
+
+   <pool name>
+   <pool address>
+
+   ◎ <deploy amount> SOL | <strategy> | bin <active_bin>
+   Range: <minPrice> → <maxPrice>
+   Range cover: <downside %> downside | <upside %> upside | <total width %> total
+
+   IMPORTANT:
+   - Do NOT calculate the range percentages yourself.
+   - Use the actual deploy_position tool result:
+     range_coverage.downside_pct
+     range_coverage.upside_pct
+     range_coverage.width_pct
+
+   MARKET
+   Fee/TVL: <x>%
+   Volume: $<x>
+   TVL: $<x>
+   Volatility: <x>
+   Organic: <x>
+   Mcap: $<x>
+   Age: <x>h
+
+   AUDIT
+   Top10: <x>%
+   Bots: <x>%
+   Fees paid: <x> SOL
+   Smart wallets: <names or none>
+
+   RISK
+   <If OKX advanced/risk data exists, list only the fields that actually exist: Risk level, Bundle, Sniper, Suspicious, ATH distance, Rugpull, Wash.>
+   <If only rugpull/wash exist, list just those.>
+   <If OKX enrichment is missing, write exactly: OKX: unavailable>
+
+   WHY THIS WON
+   <2-4 concise sentences: why you confirmed the code's pick, and the key risks>
+4. To VETO: call no tools and report in this exact format:
+   ⛔ NO DEPLOY
+
+   Cycle finished with no valid entry.
+
+   BEST LOOKING CANDIDATE
+   ${selected.pool.name}
+
+   WHY SKIPPED
+   <one line: the qualitative veto reason (narrative quality, PVP context, smart-wallet read)>
+IMPORTANT:
+- Never write "unknown" for OKX. Use real values, omit missing fields, or write exactly "OKX: unavailable".
+- Keep the whole report compact and highly scannable for Telegram.
+      `;
+    // Multi-candidate goal kept verbatim for rollback (screenerVetoOnly=false).
+    const multiGoal = `
 SCREENING CYCLE
 ${strategyBlock}
 Positions: ${prePositions.total_positions}/${config.risk.maxPositions} | SOL: ${currentBalance.sol.toFixed(3)} | Deploy: ${deployAmount} SOL
@@ -1449,7 +1535,8 @@ IMPORTANT:
 - If a candidate was rejected for fragility plus weak fee economics, say that plainly in WHY SKIPPED or REJECTED.
 - Treat LPAgent shortlist signal as a confidence modifier, not a blind override. Penalize stale LP cohorts or weak fee capture, reward deep/healthy cohorts.
 - Keep the whole report compact and highly scannable for Telegram.
-      `, config.llm.maxSteps, [], "SCREENER", config.llm.screeningModel, 2048, {
+      `;
+    const { content } = await agentLoop(config.screening.screenerVetoOnly ? vetoGoal : multiGoal, config.llm.maxSteps, [], "SCREENER", config.llm.screeningModel, 2048, {
         onToolStart: async ({ name }) => {
           if (name === "deploy_position") deployAttempted = true;
           await liveMessage?.toolStart(name);
@@ -1558,10 +1645,12 @@ Summarize the current portfolio health, total fees earned, and performance of al
     }
   }, { timezone: 'Asia/Singapore' });
 
-  // Lightweight 30s PnL poller — updates trailing TP state between management cycles, no LLM
+  // Lightweight 30s PnL poller — updates trailing TP state between management cycles, no LLM.
+  // Runs even while management/screening cycles are busy so emergency closes are never blind;
+  // only the emergency direct-close path acts during a busy cycle (full-cycle triggers stay gated).
   let _pnlPollBusy = false;
   const pnlPollInterval = setInterval(async () => {
-    if (_managementBusy || _screeningBusy || _pnlPollBusy) return;
+    if (_pnlPollBusy) return;
     if (getTrackedPositions(true).length === 0) return;
     _pnlPollBusy = true;
     try {
@@ -1576,6 +1665,29 @@ Summarize the current portfolio health, total fees earned, and performance of al
           schedulePeakConfirmation(p.position);
         }
         const exit = updatePnlAndCheckExits(p.position, p, config.management);
+        // Compute deterministic rules BEFORE acting on the state.js exit so an emergency
+        // is never shadowed into the cooldown-gated path below.
+        const closeRule = getDeterministicCloseRule(p, config.management);
+        if (closeRule?.emergency) {
+          if (_closeInFlight.has(p.position)) {
+            log("state", `[PnL poll] Emergency close already in flight for ${p.pair} — skipping`);
+            continue;
+          }
+          log("state", `[PnL poll] 🚨 EMERGENCY close: ${p.pair} — ${closeRule.reason} — bypassing cooldown + LLM`);
+          _pollTriggeredAt = Date.now();
+          _closeInFlight.add(p.position);
+          (async () => {
+            try {
+              const { executeTool } = await import("./tools/executor.js");
+              await executeTool("close_position", { position_address: p.position, reason: closeRule.reason, emergency: true });
+            } catch (e) {
+              log("cron_error", `Emergency close failed for ${p.pair}: ${e.message}`);
+            } finally {
+              _closeInFlight.delete(p.position);
+            }
+          })();
+          break;
+        }
         if (exit) {
           if (exit.action === "TRAILING_TP" && exit.needs_confirmation && shouldUsePnlRecheck()) {
             if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, exit.trailing_drop_pct ?? config.management.trailingDropPct)) {
@@ -1585,38 +1697,24 @@ Summarize the current portfolio health, total fees earned, and performance of al
           }
           const cooldownMs = config.schedule.managementIntervalMin * 60 * 1000;
           const sinceLastTrigger = Date.now() - _pollTriggeredAt;
-          if (_managementBusy || sinceLastTrigger < cooldownMs) {
-            log("state", `[PnL poll] Exit alert: ${p.pair} — ${exit.reason} — ${_managementBusy ? "already running" : "cooldown (${Math.round((cooldownMs - sinceLastTrigger) / 1000)}s left)"}`);
+          if (_managementBusy || _screeningBusy || sinceLastTrigger < cooldownMs) {
+            log("state", `[PnL poll] Exit alert: ${p.pair} — ${exit.reason} — ${_managementBusy || _screeningBusy ? "already running" : "cooldown (${Math.round((cooldownMs - sinceLastTrigger) / 1000)}s left)"}`);
           } else {
             _pollTriggeredAt = Date.now();
             log("state", `[PnL poll] Exit alert: ${p.pair} — ${exit.reason} — triggering management`);
-            if (!_managementBusy) runManagementCycle({ silent: true }).catch((e) => log("cron_error", `Poll-triggered management failed: ${e.message}`));
+            if (!_managementBusy && !_screeningBusy) runManagementCycle({ silent: true }).catch((e) => log("cron_error", `Poll-triggered management failed: ${e.message}`));
           }
           break;
         }
-        const closeRule = getDeterministicCloseRule(p, config.management);
         if (closeRule) {
-          if (closeRule.emergency) {
-            log("state", `[PnL poll] 🚨 EMERGENCY close: ${p.pair} — ${closeRule.reason} — bypassing cooldown + LLM`);
-            _pollTriggeredAt = Date.now();
-            (async () => {
-              try {
-                const { executeTool } = await import("./tools/executor.js");
-                await executeTool("close_position", { position_address: p.position, reason: closeRule.reason, emergency: true });
-              } catch (e) {
-                log("cron_error", `Emergency close failed for ${p.pair}: ${e.message}`);
-              }
-            })();
-            break;
-          }
           const cooldownMs = config.schedule.managementIntervalMin * 60 * 1000;
           const sinceLastTrigger = Date.now() - _pollTriggeredAt;
-          if (_managementBusy || sinceLastTrigger < cooldownMs) {
-            log("state", `[PnL poll] Deterministic close rule: ${p.pair} — Rule ${closeRule.rule}: ${closeRule.reason} — ${_managementBusy ? "already running" : "cooldown (${Math.round((cooldownMs - sinceLastTrigger) / 1000)}s left)"}`);
+          if (_managementBusy || _screeningBusy || sinceLastTrigger < cooldownMs) {
+            log("state", `[PnL poll] Deterministic close rule: ${p.pair} — Rule ${closeRule.rule}: ${closeRule.reason} — ${_managementBusy || _screeningBusy ? "already running" : "cooldown (${Math.round((cooldownMs - sinceLastTrigger) / 1000)}s left)"}`);
           } else {
             _pollTriggeredAt = Date.now();
             log("state", `[PnL poll] Deterministic close rule: ${p.pair} — Rule ${closeRule.rule}: ${closeRule.reason} — triggering management`);
-            if (!_managementBusy) runManagementCycle({ silent: true }).catch((e) => log("cron_error", `Poll-triggered management failed: ${e.message}`));
+            if (!_managementBusy && !_screeningBusy) runManagementCycle({ silent: true }).catch((e) => log("cron_error", `Poll-triggered management failed: ${e.message}`));
           }
           break;
         }
@@ -1668,14 +1766,6 @@ function formatCandidates(candidates) {
     "  " + "─".repeat(68),
     ...lines,
   ].join("\n");
-}
-
-function getBandConfigForPosition(tracked, managementConfig) {
-  const fallback = String(managementConfig.managementBands?.fallback || "B").toUpperCase();
-  const band = String(tracked?.management_band || fallback).toUpperCase();
-  if (band === "A") return { band: "A", ...(managementConfig.managementBands?.bandA || {}) };
-  if (band === "C") return { band: "C", ...(managementConfig.managementBands?.bandC || {}) };
-  return { band: "B", ...(managementConfig.managementBands?.bandB || {}) };
 }
 
 function getDeterministicCloseRule(position, managementConfig) {
@@ -1809,22 +1899,41 @@ function getDeterministicCloseRule(position, managementConfig) {
       management_band: band,
     };
   }
-  // Rule 4-above — OOR above upper bin
+  // Rule 4-above — OOR above upper bin. Fee-aware: while the pump still pays fees at
+  // meaningful velocity, extend the wait (capped via upperOorFeeMaxExtensions).
   if (
     !inManualGrace &&
     position.active_bin != null &&
     position.upper_bin != null &&
-    position.active_bin > position.upper_bin &&
-    (position.minutes_out_of_range ?? 0) >= (bandConfig.upperOorWaitMinutes ?? managementConfig.outOfRangeWaitMinutesUpper ?? managementConfig.outOfRangeWaitMinutes)
+    position.active_bin > position.upper_bin
   ) {
-    const waitLimit = bandConfig.upperOorWaitMinutes ?? managementConfig.outOfRangeWaitMinutesUpper ?? managementConfig.outOfRangeWaitMinutes;
-    return {
-      action: "CLOSE",
-      rule: 4,
-      reason: `Upper OOR close (Band ${band}): out of range for ${position.minutes_out_of_range ?? 0}m (limit: ${waitLimit}m)`,
-      classification: "upper_oor_forced",
-      management_band: band,
-    };
+    const minutesOOR = position.minutes_out_of_range ?? 0;
+    const extensionsUsed = tracked?.upper_oor_fee_extensions ?? 0;
+    let waitLimit = (bandConfig.upperOorWaitMinutes ?? managementConfig.outOfRangeWaitMinutesUpper ?? managementConfig.outOfRangeWaitMinutes)
+      + extensionsUsed * (managementConfig.upperOorFeeExtendMinutes ?? 5);
+    const feeExt = computeUpperOorFeeExtension({
+      managementBand: band,
+      mgmtConfig: managementConfig,
+      currentPnlPct: position.pnl_pct,
+      minutesOOR,
+      waitLimit,
+      snapshots: tracked?.snapshots || [],
+      extensionsUsed,
+    });
+    if (feeExt.extended) {
+      recordUpperOorFeeExtension(position.position, feeExt.extensionCount);
+      log("state", `Position ${position.position} ${feeExt.reason}`);
+      waitLimit = feeExt.waitLimit;
+    }
+    if (minutesOOR >= waitLimit) {
+      return {
+        action: "CLOSE",
+        rule: 4,
+        reason: `Upper OOR close (Band ${band}): out of range for ${minutesOOR}m (limit: ${waitLimit}m)`,
+        classification: "upper_oor_forced",
+        management_band: band,
+      };
+    }
   }
   // Rule 4c — Fee-decay fragility signal (GAP-C) via shared helper.
   const feeDecayResult = computeFeeDecayClose({
@@ -2564,6 +2673,7 @@ async function deployLatestCandidate(index) {
   const binsBelow = computeBinsBelow(candidate.volatility);
   const result = await executeTool("deploy_position", {
     pool_address: candidate.pool,
+    deploy_source: "manual", // /deploy is user-initiated — exempt from staged-signal gating
     amount_y: deployAmount,
     strategy: config.strategy.strategy,
     bins_below: binsBelow,

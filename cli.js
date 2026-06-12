@@ -267,6 +267,7 @@ switch (subcommand) {
     const { executeTool } = await import("./tools/executor.js");
     out(await executeTool("deploy_position", {
       pool_address: flags.pool,
+      deploy_source: "manual", // CLI deploys are user-initiated — exempt from staged-signal gating
       amount_y: parseFloat(flags.amount),
       strategy: flags.strategy,
       bins_below: flags["bins-below"] ? parseInt(flags["bins-below"]) : undefined,

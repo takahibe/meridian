@@ -157,3 +157,25 @@ export function computeUpperOorFeeExtension({
 
   return { waitLimit, extended: false };
 }
+
+/**
+ * Resolve the effective band config for a tracked position.
+ * Prefers the live fragility-adjusted table persisted by state.js
+ * (updatePnlAndCheckExits) so both rule engines see the same thresholds,
+ * falling back to the raw config band tables when absent or stale
+ * (no position snapshot in >10 minutes).
+ */
+export function getBandConfigForPosition(tracked, managementConfig) {
+  const fallback = String(managementConfig.managementBands?.fallback || "B").toUpperCase();
+  const band = String(tracked?.management_band || fallback).toUpperCase();
+  if (tracked?.management_band_config) {
+    const snaps = tracked.snapshots || [];
+    const lastSnapTs = snaps.length ? new Date(snaps[snaps.length - 1].ts).getTime() : NaN;
+    if (Number.isFinite(lastSnapTs) && Date.now() - lastSnapTs <= 10 * 60 * 1000) {
+      return { band, ...tracked.management_band_config };
+    }
+  }
+  if (band === "A") return { band: "A", ...(managementConfig.managementBands?.bandA || {}) };
+  if (band === "C") return { band: "C", ...(managementConfig.managementBands?.bandC || {}) };
+  return { band: "B", ...(managementConfig.managementBands?.bandB || {}) };
+}

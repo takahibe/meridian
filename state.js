@@ -580,6 +580,19 @@ export function markStopLossWarned(position_address) {
 }
 
 /**
+ * Record a granted upper-OOR fee-aware wait extension (computeUpperOorFeeExtension).
+ * Called from the index.js rule engine; the state.js engine persists inline.
+ */
+export function recordUpperOorFeeExtension(position_address, extensionCount) {
+  const state = load();
+  const pos = state.positions[position_address];
+  if (!pos) return false;
+  pos.upper_oor_fee_extensions = extensionCount;
+  save(state);
+  return true;
+}
+
+/**
  * Set a persistent instruction for a position (e.g. "hold until 5% profit").
  * Overwrites any previous instruction. Pass null to clear.
  */
@@ -966,11 +979,31 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
     const bidAskFillMin = mgmtConfig.bidAskFillMinutes ?? 60;
     const inBidAskFillGrace = pos.strategy === "bid_ask" && dir === "lower" && ageMinutes < bidAskFillMin;
     if (!inBidAskFillGrace) {
-      const waitLimit = dir === "upper"
+      let waitLimit = dir === "upper"
         ? (bandConfig.upperOorWaitMinutes ?? mgmtConfig.outOfRangeWaitMinutesUpper ?? mgmtConfig.outOfRangeWaitMinutes)
         : dir === "lower"
         ? (bandConfig.lowerOorWaitMinutes ?? mgmtConfig.outOfRangeWaitMinutesLower ?? mgmtConfig.outOfRangeWaitMinutes)
         : mgmtConfig.outOfRangeWaitMinutes;
+      if (dir === "upper") {
+        // Fee-aware extension: while pumped above range with fees still flowing, wait longer (capped).
+        const extensionsUsed = pos.upper_oor_fee_extensions ?? 0;
+        waitLimit += extensionsUsed * (mgmtConfig.upperOorFeeExtendMinutes ?? 5);
+        const feeExt = computeUpperOorFeeExtension({
+          managementBand,
+          mgmtConfig,
+          currentPnlPct,
+          minutesOOR,
+          waitLimit,
+          snapshots: pos.snapshots,
+          extensionsUsed,
+        });
+        if (feeExt.extended) {
+          pos.upper_oor_fee_extensions = feeExt.extensionCount;
+          save(state);
+          log("state", `Position ${position_address} ${feeExt.reason}`);
+          waitLimit = feeExt.waitLimit;
+        }
+      }
       if (minutesOOR >= waitLimit) {
         return {
           action: "OUT_OF_RANGE",

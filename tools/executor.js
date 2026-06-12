@@ -23,6 +23,7 @@ import { getTokenInfo, getTokenHolders, getTokenNarrative } from "./token.js";
 import { getXNarrativeSignal } from "./x-narrative.js";
 import { config, reloadScreeningThresholds, MIN_SAFE_BINS_BELOW } from "../config.js";
 import { getRecentDecisions } from "../decision-log.js";
+import { peekStagedSignals, peekSelectedPool } from "../signal-tracker.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -183,6 +184,7 @@ const toolMap = {
       maxTokenAgeHours: ["screening", "maxTokenAgeHours"],
       athFilterPct:     ["screening", "athFilterPct"],
       screenerFunnelEnabled: ["screening", "screenerFunnelEnabled"],
+      screenerVetoOnly: ["screening", "screenerVetoOnly"],
       xNarrativeMinConfidence: ["screening", "xNarrativeMinConfidence"],
       xNarrativeFailOpenOnUnavailable: ["screening", "xNarrativeFailOpenOnUnavailable"],
       xNarrativeEnabled: ["screening", "xNarrativeEnabled"],
@@ -679,8 +681,9 @@ export async function executeTool(name, args) {
 /**
  * Run safety checks before executing write operations.
  */
-function extractDeployBand(args = {}) {
+function extractDeployBand(args = {}, staged = null) {
   const candidates = [
+    staged?.screening_band,
     args.band,
     args.screening_band,
     args.signal_snapshot?.screening_band,
@@ -702,10 +705,10 @@ function extractDeployBand(args = {}) {
   return null;
 }
 
-function getMinimumDeployForBand(args = {}) {
+function getMinimumDeployForBand(args = {}, staged = null) {
   const baseMin = Math.max(0.1, Number(config.management.deployAmountSol ?? 0.5));
   const reducedMin = Math.max(0.1, Number(config.management.deployAmountSolMin ?? baseMin));
-  const band = extractDeployBand(args);
+  const band = extractDeployBand(args, staged);
 
   if (band === "B") {
     return { band, minDeploy: Math.min(baseMin, reducedMin), label: "band B reduced-risk" };
@@ -719,13 +722,29 @@ function getMinimumDeployForBand(args = {}) {
 async function runSafetyChecks(name, args) {
   switch (name) {
     case "deploy_position": {
+      const isAuto = args.deploy_source !== "manual";
+      // Code-computed ground truth staged during screening — for auto deploys it
+      // takes precedence over LLM-echoed args so omitted/forged fields can't
+      // silently skip the gates below. Manual deploys keep args-only behavior.
+      const staged = isAuto ? peekStagedSignals(args.pool_address, args.base_mint) : null;
+
+      // The pct-range path skips the bins_below floor checks below — keep it as a
+      // manual escape hatch only (agent.js tags non-GENERAL deploys as "auto").
+      if (isAuto && (args.downside_pct != null || args.upside_pct != null)) {
+        return {
+          pass: false,
+          reason: "pct-range path is manual-only — use bins_below.",
+        };
+      }
+
       // Reject pools with bin_step out of configured range
       const minStep = config.screening.minBinStep;
       const maxStep = config.screening.maxBinStep;
-      if (args.bin_step != null && (args.bin_step < minStep || args.bin_step > maxStep)) {
+      const effectiveBinStep = staged?.bin_step ?? args.bin_step;
+      if (effectiveBinStep != null && (effectiveBinStep < minStep || effectiveBinStep > maxStep)) {
         return {
           pass: false,
-          reason: `bin_step ${args.bin_step} is outside the allowed range of [${minStep}-${maxStep}].`,
+          reason: `bin_step ${effectiveBinStep} is outside the allowed range of [${minStep}-${maxStep}].`,
         };
       }
 
@@ -747,15 +766,39 @@ async function runSafetyChecks(name, args) {
         };
       }
 
+      // Auto deploys must target a pool from the current screened candidate set.
+      // Spot-adds to a pool we already hold are code-triggered (index.js) long
+      // after staging expired, so they are exempt.
+      if (isAuto && !staged && !(args.allow_spot_add && alreadyInPool)) {
+        return {
+          pass: false,
+          reason: "pool is not in the current screened candidate set (staged signals missing/expired). Re-run screening before deploying.",
+        };
+      }
+
+      // Veto-only mode: the screening cycle stages the code-selected candidate
+      // (deterministic scoreCandidate order) — the screener may only confirm or
+      // veto it, never substitute another pool. Same spot-add exemption as above.
+      if (isAuto && config.screening.screenerVetoOnly && !(args.allow_spot_add && alreadyInPool)) {
+        const selectedPool = peekSelectedPool();
+        if (!selectedPool || selectedPool !== String(args.pool_address ?? "").trim()) {
+          return {
+            pass: false,
+            reason: `screener may only deploy the code-selected candidate${selectedPool ? ` (${selectedPool})` : ""}, not ${args.pool_address}.`,
+          };
+        }
+      }
+
       // Block same base token across different pools
-      if (args.base_mint) {
+      const effectiveBaseMint = staged?.base_mint ?? args.base_mint;
+      if (effectiveBaseMint) {
         const alreadyHasMint = positions.positions.some(
-          (p) => p.base_mint === args.base_mint
+          (p) => p.base_mint === effectiveBaseMint
         );
         if (alreadyHasMint) {
           return {
             pass: false,
-            reason: `Already holding base token ${args.base_mint} in another pool. One position per token only.`,
+            reason: `Already holding base token ${effectiveBaseMint} in another pool. One position per token only.`,
           };
         }
       }
@@ -769,7 +812,7 @@ async function runSafetyChecks(name, args) {
         };
       }
 
-      const { band: deployBand, minDeploy, label: minDeployLabel } = getMinimumDeployForBand(args);
+      const { band: deployBand, minDeploy, label: minDeployLabel } = getMinimumDeployForBand(args, staged);
       if (minDeploy == null) {
         return {
           pass: false,
@@ -786,6 +829,13 @@ async function runSafetyChecks(name, args) {
         return {
           pass: false,
           reason: `SOL amount ${amountY} exceeds maximum allowed per position (${config.risk.maxDeployAmount}).`,
+        };
+      }
+      // Cap auto deploys at this cycle's code-computed deploy size (staged during screening)
+      if (staged && Number.isFinite(staged.max_deploy_sol) && amountY > staged.max_deploy_sol + 1e-6) {
+        return {
+          pass: false,
+          reason: `SOL amount ${amountY} exceeds this cycle's computed deploy amount (${staged.max_deploy_sol} SOL).`,
         };
       }
 
@@ -830,7 +880,7 @@ async function runSafetyChecks(name, args) {
       } else if (typeof args.signal_snapshot === "string") {
         try { snapshotVolatility = JSON.parse(args.signal_snapshot)?.volatility; } catch { /* ignore malformed snapshot */ }
       }
-      const rawVolatility = args.volatility ?? snapshotVolatility;
+      const rawVolatility = staged?.volatility ?? args.volatility ?? snapshotVolatility;
       const requestedVolatility = rawVolatility == null ? null : Number(rawVolatility);
 
       if (rawVolatility != null && (!Number.isFinite(requestedVolatility) || requestedVolatility < 0)) {
@@ -891,8 +941,8 @@ async function runSafetyChecks(name, args) {
       }
 
       // Block ultrafragile pools — fragility_score >= 40 is too risky for any deploy
-      const fragilityScore = args.fragility_score ?? args.signal_snapshot?.fragility_score ?? null;
-      const fragilityLevel = args.fragility_level ?? args.signal_snapshot?.fragility_level ?? null;
+      const fragilityScore = staged?.fragility_score ?? args.fragility_score ?? args.signal_snapshot?.fragility_score ?? null;
+      const fragilityLevel = staged?.fragility_level ?? args.fragility_level ?? args.signal_snapshot?.fragility_level ?? null;
       if (fragilityScore != null && Number(fragilityScore) >= 40) {
         return {
           pass: false,

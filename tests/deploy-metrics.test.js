@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "fs";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { trackPosition } from "../state.js";
 
 const REAL_STATE = "./state.json";
@@ -107,4 +109,44 @@ test("active_tvl_at_deploy and volume_at_deploy are persisted from signal_snapsh
   const pos = state.positions.pos_test_1;
   assert.equal(pos.active_tvl_at_deploy, 50000);
   assert.equal(pos.volume_at_deploy, 12000);
+});
+
+// Why these tests exist: downside_pct/upside_pct used to bypass both the
+// MIN_SAFE_BINS_BELOW floor in dlmm.js and the bins_below safety checks in
+// executor.js, letting an LLM-supplied tiny pct produce a 1-bin deploy of real
+// money. The runner needs --experimental-test-module-mocks, so it runs in a
+// child process (same pattern as agent-deploy-race.test.js).
+const pctRunner = fileURLToPath(new URL("./deploy-pct-guard-runner.mjs", import.meta.url));
+let _pctGuard = null;
+function pctGuardSummary() {
+  if (!_pctGuard) {
+    const res = spawnSync(process.execPath, ["--experimental-test-module-mocks", "--no-warnings", pctRunner], {
+      encoding: "utf8",
+      timeout: 60_000,
+    });
+    assert.equal(res.status, 0, `runner failed\nstdout: ${res.stdout}\nstderr: ${res.stderr}`);
+    _pctGuard = JSON.parse(res.stdout.trim().split("\n").pop());
+  }
+  return _pctGuard;
+}
+
+test("downside_pct deploys still respect the MIN_SAFE_BINS_BELOW floor", () => {
+  const s = pctGuardSummary();
+  assert.ok(
+    s.dryRunBinsBelow >= s.minSafeBinsBelow,
+    `downside_pct=1 produced ${s.dryRunBinsBelow} bins below — must never deploy under the ${s.minSafeBinsBelow}-bin safety floor`
+  );
+});
+
+test("auto deploys with pct-range args are blocked by the executor", () => {
+  const s = pctGuardSummary();
+  assert.match(s.autoDownsideReason ?? "", /manual-only/, "auto deploy with downside_pct must be rejected");
+  assert.match(s.autoUpsideReason ?? "", /manual-only/, "untagged deploy with upside_pct must be rejected");
+});
+
+test("manual deploys may still use pct-range args", () => {
+  const s = pctGuardSummary();
+  // Blocked by the NEXT check (out-of-range bin_step), proving the pct gate let it through
+  assert.match(s.manualDownsideReason ?? "", /bin_step/, "manual pct deploy must reach the bin_step check");
+  assert.doesNotMatch(s.manualDownsideReason ?? "", /manual-only/, "manual pct deploy must not hit the pct gate");
 });
