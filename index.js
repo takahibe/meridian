@@ -41,6 +41,7 @@ import { assignBand } from "./tools/scoring.js";
 import { stageSignals, stageSelectedPool } from "./signal-tracker.js";
 import { recordCandidateObservation, summarizeRecentPoolTrend } from "./data-collector.js";
 import { getWeightsSummary } from "./signal-weights.js";
+import { applySupportUnverifiedRiskMode, candidateDeployAmount, evaluateSupportUnverifiedGate } from "./support-risk-mode.js";
 import { bootstrapHiveMind, ensureAgentId, getHiveMindPullMode, isHiveMindEnabled, pullHiveMindLessons, pullHiveMindPresets, registerHiveMindAgent, startHiveMindBackgroundSync } from "./hivemind.js";
 import { appendDecision } from "./decision-log.js";
 import { runWeeklySourceCheck } from "./scripts/weekly-source-check.js";
@@ -849,10 +850,16 @@ export async function runScreeningCycle({ silent = false } = {}) {
       } else if (config.strategy.strategy === "bid_ask") {
         // bid_ask = bounce entry — must have confirmed support (supertrend / BB lower) below range.
         // No indicator data means we can't verify the lower bin covers support. DATBIHGAH-SOL lost
-        // -13.65% because the range floated above the supertrend. Hard-reject instead of guessing.
-        log("screening", `Support gate: dropped ${pool.name} — no supertrend/BB support data for bid_ask entry (range cannot be validated against support)`);
-        filteredOut.push({ name: pool.name, reason: "no supertrend/BB support data for bid_ask entry" });
-        return false;
+        // -13.65% because the range floated above the supertrend. Hard-reject by default; only
+        // approval-gated support-unverified mode may pass it, and then only with capped size.
+        const supportDecision = evaluateSupportUnverifiedGate({ pool, strategy: config.strategy.strategy, supportCoverage, config });
+        if (!supportDecision.allow) {
+          log("screening", `Support gate: dropped ${pool.name} — ${supportDecision.reason} (range cannot be validated against support)`);
+          filteredOut.push({ name: pool.name, reason: supportDecision.reason });
+          return false;
+        }
+        applySupportUnverifiedRiskMode(pool, supportDecision, config, deployAmount);
+        log("screening", `Support risk mode: allowing ${pool.name} without supertrend/BB support data; max_deploy_sol=${pool.max_deploy_sol} SOL`);
       }
       pool.recommended_bins_below = recommendedBinsBelow;
       setRecommendedBins(pool.pool, { bins: recommendedBinsBelow, fragility, volatility: pool.volatility, support: supportCoverage });
@@ -1176,7 +1183,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
 
       pool.screening_band = banding.band;
       pool.funnel_reasons = banding.reasons || [];
-      pool.funnel_risks = banding.risks || [];
+      pool.funnel_risks = Array.from(new Set([...(banding.risks || []), ...(pool.support_unverified ? ["support_unverified"] : [])]));
       return { ...entry, lpSignal, banding };
     });
 
@@ -1235,6 +1242,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
     });
 
     const candidateBlocks = visiblePassing.map(({ pool, sw, n, ti, mem, lpSignal, x, banding }) => {
+      const poolDeployAmount = candidateDeployAmount(pool, deployAmount, config);
       const botPct = ti?.audit?.bot_holders_pct ?? "?";
       const top10Pct = ti?.audit?.top_holders_pct ?? "?";
       const feesSol = ti?.global_fees_sol ?? "?";
@@ -1265,13 +1273,15 @@ export async function runScreeningCycle({ silent = false } = {}) {
       const lpSignalLine = lpSignal
         ? `  lpagent: ${lpSignal.confidence}(${lpSignal.score})${lpSignal.reasons?.length ? ` | + ${lpSignal.reasons.join("; ")}` : ""}${lpSignal.risks?.length ? ` | - ${lpSignal.risks.join("; ")}` : ""}`
         : null;
-      const funnelLine = `  funnel: band=${banding.band} | x=${x?.narrative_confidence ?? "unknown"} | reasons=${(banding.reasons || []).join("; ") || "none"}${banding.risks?.length ? ` | risks=${banding.risks.join("; ")}` : ""}`;
+      const funnelLine = `  funnel: band=${banding.band} | x=${x?.narrative_confidence ?? "unknown"} | reasons=${(banding.reasons || []).join("; ") || "none"}${pool.funnel_risks?.length ? ` | risks=${pool.funnel_risks.join("; ")}` : ""}`;
       const recentTrend = summarizeRecentPoolTrend(pool.pool, getRecentSnapshots(pool.pool, 6));
 
       stageSignals(pool.pool, {
         base_mint: pool.base?.mint || pool.base_mint || ti?.mint || null,
         bin_step: pool.bin_step ?? null,
-        max_deploy_sol: deployAmount,
+        max_deploy_sol: poolDeployAmount,
+        support_unverified: pool.support_unverified === true,
+        support_unverified_reason: pool.support_unverified_reason ?? null,
         gmgn_score: pool.gmgn_score ?? null,
         active_tvl: pool.active_tvl ?? null,
         open_positions: pool.open_positions ?? null,
@@ -1300,7 +1310,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
         recent_fee_per_tvl_24h: recentTrend.recent_fee_per_tvl_24h,
         screening_band: banding.band,
         funnel_reasons: banding.reasons || [],
-        funnel_risks: banding.risks || [],
+        funnel_risks: pool.funnel_risks || [],
         x_unavailable_reason: x?.reason ?? null,
       });
       recordCandidateObservation({
@@ -1323,10 +1333,10 @@ export async function runScreeningCycle({ silent = false } = {}) {
       if (pool.gmgn) {
         block = [
           `POOL: ${pool.name} (${pool.pool})`,
-          `  deploy_args: band=${banding.band}, amount_y<=${deployAmount}, bins_above=0`,
+          `  deploy_args: band=${banding.band}, amount_y<=${poolDeployAmount}, bins_above=0${pool.support_unverified ? " (SUPPORT-UNVERIFIED CAP)" : ""}`,
           formatGmgnCandidateForPrompt(pool),
           funnelLine,
-          `  fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"}), recommended_bins_below=${pool.recommended_bins_below ?? "?"}${pool.support_bins_below != null ? `, support_bins=${pool.support_bins_below} (${pool.support_source || "support"})` : ""}`,
+          `  fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"}), recommended_bins_below=${pool.recommended_bins_below ?? "?"}${pool.support_bins_below != null ? `, support_bins=${pool.support_bins_below} (${pool.support_source || "support"})` : ""}${pool.support_unverified ? `, support=UNVERIFIED (${pool.support_unverified_reason})` : ""}`,
           recentTrendLine,
           pvpLine,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
@@ -1341,8 +1351,8 @@ export async function runScreeningCycle({ silent = false } = {}) {
           : null;
         block = [
           `POOL: ${pool.name} (${pool.pool})`,
-          `  deploy_args: band=${banding.band}, amount_y<=${deployAmount}, bins_above=0`,
-`  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.active_tvl}, volatility=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}, fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"})${pool.support_bins_below != null ? `, support_bins=${pool.support_bins_below}(${pool.support_source || "support"})` : ""}${pool.entry_fragility_reasons?.length ? ` [${pool.entry_fragility_reasons.slice(0,2).join(";")}]` : ""}`,
+          `  deploy_args: band=${banding.band}, amount_y<=${poolDeployAmount}, bins_above=0${pool.support_unverified ? " (SUPPORT-UNVERIFIED CAP)" : ""}`,
+`  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.active_tvl}, volatility=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}, fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"})${pool.support_bins_below != null ? `, support_bins=${pool.support_bins_below}(${pool.support_source || "support"})` : ""}${pool.support_unverified ? `, support=UNVERIFIED (${pool.support_unverified_reason})` : ""}${pool.entry_fragility_reasons?.length ? ` [${pool.entry_fragility_reasons.slice(0,2).join(";")}]` : ""}`,
           `  audit: top10=${top10Pct}%, bots=${botPct}%, fees=${feesSol}SOL${launchpad ? `, launchpad=${launchpad}` : ""}`,
           funnelLine,
           gmgnPriceLine,
@@ -1367,13 +1377,14 @@ export async function runScreeningCycle({ silent = false } = {}) {
 
     let deployAttempted = false;
     let deploySucceeded = false;
+    const selectedDeployAmount = candidateDeployAmount(selected.pool, deployAmount, config);
     // Veto-only goal: code already picked the candidate and computed every deploy
     // arg — the LLM's only decision is a qualitative veto (narrative quality, PVP
     // context, smart-wallet read). The executor rejects any other pool/args.
     const vetoGoal = `
 SCREENING CYCLE — VETO MODE
 ${strategyBlock}
-Positions: ${prePositions.total_positions}/${config.risk.maxPositions} | SOL: ${currentBalance.sol.toFixed(3)} | Deploy: ${deployAmount} SOL
+Positions: ${prePositions.total_positions}/${config.risk.maxPositions} | SOL: ${currentBalance.sol.toFixed(3)} | Deploy: ${selectedDeployAmount} SOL${selected.pool.support_unverified ? " (support-unverified capped)" : ""}
 
 The code has already selected this cycle's candidate deterministically and computed all deploy args. Quantitative thresholds are already enforced — do not re-litigate metrics, do not pick another pool, do not change any arg.
 
@@ -1385,7 +1396,7 @@ YOUR ONLY DECISION — confirm or veto:
 2. To CONFIRM: call deploy_position with EXACTLY these args (any other pool or larger amount is auto-rejected):
    pool_address: ${selected.pool.pool}
    strategy: ${config.strategy.strategy}
-   amount_y: ${deployAmount} (amount_x = 0)
+   amount_y: ${selectedDeployAmount} (amount_x = 0)
    bins_below: ${selected.pool.recommended_bins_below ?? config.strategy.minBinsBelow}
    bins_above: 0
    band: ${selected.banding.band}
@@ -1447,7 +1458,7 @@ IMPORTANT:
     const multiGoal = `
 SCREENING CYCLE
 ${strategyBlock}
-Positions: ${prePositions.total_positions}/${config.risk.maxPositions} | SOL: ${currentBalance.sol.toFixed(3)} | Deploy: ${deployAmount} SOL
+Positions: ${prePositions.total_positions}/${config.risk.maxPositions} | SOL: ${currentBalance.sol.toFixed(3)} | Deploy: candidate-specific cap shown in each block
 
 FUNNEL SUMMARY
 ${buildConfidenceFunnelReport(funnelCounts, visiblePassing, xApiHealth)}
@@ -1463,7 +1474,7 @@ STEPS:
    pass the candidate's band exactly (band = A or B).
    bins_below: omit (or use the candidate's recommended_bins_below). The runtime caps width based on volatility AND fragility — high-vol fragile pools must be tighter, not wider. You may pass a SMALLER value to tighten further; larger values are clamped down.
    bins_above = 0. Single-side SOL only: set amount_y, keep amount_x = 0.
-   do NOT pass amount_y larger than ${deployAmount}.
+   do NOT pass amount_y larger than the candidate's deploy_args amount_y cap.
    IMPORTANT — pass signal_snapshot so the deploy notification explains the reasoning:
    signal_snapshot: {
      band: "<A or B>",

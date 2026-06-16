@@ -183,6 +183,10 @@ const toolMap = {
       minTokenAgeHours: ["screening", "minTokenAgeHours"],
       maxTokenAgeHours: ["screening", "maxTokenAgeHours"],
       athFilterPct:     ["screening", "athFilterPct"],
+      supportUnverifiedRiskMode: ["screening", "supportUnverifiedRiskMode"],
+      supportUnverifiedMaxDeploySol: ["screening", "supportUnverifiedMaxDeploySol"],
+      supportUnverifiedMaxVolatility: ["screening", "supportUnverifiedMaxVolatility"],
+      supportUnverifiedMaxFragilityScore: ["screening", "supportUnverifiedMaxFragilityScore"],
       screenerFunnelEnabled: ["screening", "screenerFunnelEnabled"],
       screenerVetoOnly: ["screening", "screenerVetoOnly"],
       xNarrativeMinConfidence: ["screening", "xNarrativeMinConfidence"],
@@ -709,6 +713,12 @@ function getMinimumDeployForBand(args = {}, staged = null) {
   const baseMin = Math.max(0.1, Number(config.management.deployAmountSol ?? 0.5));
   const reducedMin = Math.max(0.1, Number(config.management.deployAmountSolMin ?? baseMin));
   const band = extractDeployBand(args, staged);
+
+  if (staged?.support_unverified === true) {
+    const stagedCap = Number(staged.max_deploy_sol);
+    const minDeploy = Math.min(baseMin, reducedMin, Number.isFinite(stagedCap) && stagedCap > 0 ? stagedCap : reducedMin);
+    return { band: band || "support-unverified", minDeploy, label: "support-unverified capped" };
+  }
 
   if (band === "B") {
     return { band, minDeploy: Math.min(baseMin, reducedMin), label: "band B reduced-risk" };

@@ -110,6 +110,10 @@ export const config = {
     maxVolatility:      u.maxVolatility      ?? 5.0,  // evolved by lessons system
     minVolatility:    u.minVolatility    ?? 1.0,   // hard floor — below this, fees are too thin
     maxVolatilityHard: u.maxVolatilityHard ?? 3.5,   // hard ceiling — distinct from soft maxVolatility
+    supportUnverifiedRiskMode: u.supportUnverifiedRiskMode ?? false, // approval-gated: allow missing support data only with capped deploys
+    supportUnverifiedMaxDeploySol: u.supportUnverifiedMaxDeploySol ?? u.deployAmountSolMin ?? 0.35,
+    supportUnverifiedMaxVolatility: u.supportUnverifiedMaxVolatility ?? 3.0,
+    supportUnverifiedMaxFragilityScore: u.supportUnverifiedMaxFragilityScore ?? 25,
     rejectNullVolatility: u.rejectNullVolatility ?? true,  // block GMGN candidates lacking poolDetail.volatility
     screenerFunnelEnabled: u.screenerFunnelEnabled ?? true,
     screenerVetoOnly: u.screenerVetoOnly ?? true,  // code picks the candidate; LLM only confirms or vetoes
@@ -506,6 +510,10 @@ export function reloadScreeningThresholds() {
     if (fresh.maxVolatility     != null) s.maxVolatility     = fresh.maxVolatility;
     if (fresh.minVolatility    != null) s.minVolatility    = fresh.minVolatility;
     if (fresh.maxVolatilityHard!= null) s.maxVolatilityHard= fresh.maxVolatilityHard;
+    if (fresh.supportUnverifiedRiskMode !== undefined) s.supportUnverifiedRiskMode = fresh.supportUnverifiedRiskMode;
+    if (fresh.supportUnverifiedMaxDeploySol != null) s.supportUnverifiedMaxDeploySol = fresh.supportUnverifiedMaxDeploySol;
+    if (fresh.supportUnverifiedMaxVolatility != null) s.supportUnverifiedMaxVolatility = fresh.supportUnverifiedMaxVolatility;
+    if (fresh.supportUnverifiedMaxFragilityScore != null) s.supportUnverifiedMaxFragilityScore = fresh.supportUnverifiedMaxFragilityScore;
     if (fresh.rejectNullVolatility !== undefined) s.rejectNullVolatility = fresh.rejectNullVolatility;
     if (fresh.screenerFunnelEnabled !== undefined) s.screenerFunnelEnabled = fresh.screenerFunnelEnabled;
     if (fresh.screenerVetoOnly !== undefined) s.screenerVetoOnly = fresh.screenerVetoOnly;
