@@ -42,6 +42,7 @@ import { stageSignals, stageSelectedPool } from "./signal-tracker.js";
 import { recordCandidateObservation, summarizeRecentPoolTrend } from "./data-collector.js";
 import { getWeightsSummary } from "./signal-weights.js";
 import { applySupportUnverifiedRiskMode, candidateDeployAmount, evaluateSupportUnverifiedGate } from "./support-risk-mode.js";
+import { runMeteoraDiscoveryShadowProbe } from "./tools/meteora-discovery-shadow.js";
 import { bootstrapHiveMind, ensureAgentId, getHiveMindPullMode, isHiveMindEnabled, pullHiveMindLessons, pullHiveMindPresets, registerHiveMindAgent, startHiveMindBackgroundSync } from "./hivemind.js";
 import { appendDecision } from "./decision-log.js";
 import { runWeeklySourceCheck } from "./scripts/weekly-source-check.js";
@@ -797,6 +798,11 @@ export async function runScreeningCycle({ silent = false } = {}) {
     const earlyFilteredExamples = topCandidates?.filtered_examples || [];
     const gmgnStageCounts = topCandidates?.stage_counts ?? null;
     const gmgnAllFiltered = topCandidates?.all_filtered ?? [];
+    void runMeteoraDiscoveryShadowProbe({
+      cycleId: _screeningLastStartedAt,
+      mainSource: topCandidates?.source ?? config.screening.source,
+      mainCandidates: candidates,
+    }).catch((e) => log("autoresearch", `[meteora-shadow] skipped: ${e.message}`));
 
     const allCandidates = [];
     for (const pool of candidates) {

@@ -373,6 +373,25 @@ export const config = {
     candidateConfigPath: u.autoresearch?.candidateConfigPath ?? null,
     dataCollectorEnabled: u.autoresearch?.dataCollectorEnabled ?? true,
     shadowLabelsEnabled:  u.autoresearch?.shadowLabelsEnabled  ?? true,
+    meteoraDiscoveryShadowEnabled: u.autoresearch?.meteoraDiscoveryShadowEnabled ?? false,
+    meteoraDiscoveryShadow: {
+      pageSize: u.autoresearch?.meteoraDiscoveryShadow?.pageSize ?? 50,
+      timeframe: u.autoresearch?.meteoraDiscoveryShadow?.timeframe ?? screeningTimeframe,
+      category: u.autoresearch?.meteoraDiscoveryShadow?.category ?? "trending",
+      minOrganic: u.autoresearch?.meteoraDiscoveryShadow?.minOrganic ?? 60,
+      minMcap: u.autoresearch?.meteoraDiscoveryShadow?.minMcap ?? 200_000,
+      minHolders: u.autoresearch?.meteoraDiscoveryShadow?.minHolders ?? 791,
+      minVolume: u.autoresearch?.meteoraDiscoveryShadow?.minVolume ?? 2_000,
+      minActiveTvl: u.autoresearch?.meteoraDiscoveryShadow?.minActiveTvl ?? 2_000,
+      minFeeActiveTvlRatio: u.autoresearch?.meteoraDiscoveryShadow?.minFeeActiveTvlRatio ?? 0.2,
+      minOpenPositions: u.autoresearch?.meteoraDiscoveryShadow?.minOpenPositions ?? 20,
+      minVolatility: u.autoresearch?.meteoraDiscoveryShadow?.minVolatility ?? 2,
+      maxVolatility: u.autoresearch?.meteoraDiscoveryShadow?.maxVolatility ?? 4,
+      quoteSymbols: Array.isArray(u.autoresearch?.meteoraDiscoveryShadow?.quoteSymbols)
+        ? u.autoresearch.meteoraDiscoveryShadow.quoteSymbols
+        : ["SOL"],
+      recordTopN: u.autoresearch?.meteoraDiscoveryShadow?.recordTopN ?? 20,
+    },
     factorVariables: Array.isArray(u.autoresearch?.factorVariables)
       ? u.autoresearch.factorVariables
       : [
