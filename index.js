@@ -1338,8 +1338,10 @@ export async function runScreeningCycle({ silent = false } = {}) {
       let block;
       if (pool.gmgn) {
         block = [
-          `POOL: ${pool.name} (${pool.pool})`,
-          `  deploy_args: band=${banding.band}, amount_y<=${poolDeployAmount}, bins_above=0${pool.support_unverified ? " (SUPPORT-UNVERIFIED CAP)" : ""}`,
+          `POOL: ${pool.name}`,
+          `  pool_address: ${pool.pool}`,
+          `  base_mint: ${pool.base?.mint || pool.base_mint || ti?.mint || "?"} (do NOT use this as pool_address)`,
+          `  deploy_args: band=${banding.band}, pool_address=${pool.pool}, amount_y<=${poolDeployAmount}, bins_above=0${pool.support_unverified ? " (SUPPORT-UNVERIFIED CAP)" : ""}`,
           formatGmgnCandidateForPrompt(pool),
           funnelLine,
           `  fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"}), recommended_bins_below=${pool.recommended_bins_below ?? "?"}${pool.support_bins_below != null ? `, support_bins=${pool.support_bins_below} (${pool.support_source || "support"})` : ""}${pool.support_unverified ? `, support=UNVERIFIED (${pool.support_unverified_reason})` : ""}`,
@@ -1356,8 +1358,10 @@ export async function runScreeningCycle({ silent = false } = {}) {
           ? `  gmgn_price: rsi2=${pool.gmgn_price_action.rsi2 ?? "?"}, supertrend=${pool.gmgn_price_action.supertrend?.direction || "?"}, price_vs_ath=${pool.gmgn_price_action.priceVsAthPct ?? "?"}%, 1h_change=${pool.gmgn_price_action.priceChangePct ?? "?"}%, max_vol_candle=${pool.gmgn_price_action.maxVolumeShare ?? "?"}%`
           : null;
         block = [
-          `POOL: ${pool.name} (${pool.pool})`,
-          `  deploy_args: band=${banding.band}, amount_y<=${poolDeployAmount}, bins_above=0${pool.support_unverified ? " (SUPPORT-UNVERIFIED CAP)" : ""}`,
+          `POOL: ${pool.name}`,
+          `  pool_address: ${pool.pool}`,
+          `  base_mint: ${pool.base?.mint || pool.base_mint || ti?.mint || "?"} (do NOT use this as pool_address)`,
+          `  deploy_args: band=${banding.band}, pool_address=${pool.pool}, amount_y<=${poolDeployAmount}, bins_above=0${pool.support_unverified ? " (SUPPORT-UNVERIFIED CAP)" : ""}`,
 `  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.active_tvl}, volatility=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}, fragility=${pool.entry_fragility_level ?? "?"}(${pool.entry_fragility_score ?? "?"})${pool.support_bins_below != null ? `, support_bins=${pool.support_bins_below}(${pool.support_source || "support"})` : ""}${pool.support_unverified ? `, support=UNVERIFIED (${pool.support_unverified_reason})` : ""}${pool.entry_fragility_reasons?.length ? ` [${pool.entry_fragility_reasons.slice(0,2).join(";")}]` : ""}`,
           `  audit: top10=${top10Pct}%, bots=${botPct}%, fees=${feesSol}SOL${launchpad ? `, launchpad=${launchpad}` : ""}`,
           funnelLine,
@@ -1399,7 +1403,7 @@ ${candidateBlocks[0]}
 
 YOUR ONLY DECISION — confirm or veto:
 1. Judge the qualitative read only: narrative quality, PVP context, smart-wallet read, anything in the block that looks like a trap.
-2. To CONFIRM: call deploy_position with EXACTLY these args (any other pool or larger amount is auto-rejected):
+2. To CONFIRM: call deploy_position with EXACTLY these args (any other pool, token mint/base_mint, or larger amount is auto-rejected):
    pool_address: ${selected.pool.pool}
    strategy: ${config.strategy.strategy}
    amount_y: ${selectedDeployAmount} (amount_x = 0)
@@ -1554,8 +1558,11 @@ IMPORTANT:
 - Keep the whole report compact and highly scannable for Telegram.
       `;
     const { content } = await agentLoop(config.screening.screenerVetoOnly ? vetoGoal : multiGoal, config.llm.maxSteps, [], "SCREENER", config.llm.screeningModel, 2048, {
-        onToolStart: async ({ name }) => {
-          if (name === "deploy_position") deployAttempted = true;
+        onToolStart: async ({ name, args }) => {
+          if (name === "deploy_position") {
+            deployAttempted = true;
+            log("screening", `deploy_position attempt pool=${String(args?.pool_address ?? "?").slice(0, 12)} selected=${String(selected.pool.pool ?? "?").slice(0, 12)} source=${config.screening.source}`);
+          }
           await liveMessage?.toolStart(name);
         },
         onToolFinish: async ({ name, result, success }) => {
@@ -3405,12 +3412,9 @@ Focus on: hold duration, entry/exit timing, what win rates look like, whether sc
   startPolling(telegramHandler);
   (async () => {
     try {
-      const startupStep3 = process.env.DRY_RUN === "true"
-        ? `3. Ignore wallet SOL threshold in dry run: get_top_candidates then simulate deploy ${DEPLOY} SOL.`
-        : `3. If SOL >= ${config.management.minSolToOpen}: get_top_candidates then deploy ${DEPLOY} SOL.`;
       await agentLoop(`
-STARTUP CHECK
-1. get_wallet_balance. 2. get_my_positions. ${startupStep3} 4. Report.
+STARTUP CHECK — READ ONLY
+1. get_wallet_balance. 2. get_my_positions. 3. get_top_candidates for visibility only. 4. Report. Do NOT deploy, close, swap, claim, or update config during startup check; live deploys must come from the normal screening cycle so staged safety signals exist.
       `, config.llm.maxSteps, [], "SCREENER");
     } catch (e) {
       log("startup_error", e.message);

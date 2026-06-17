@@ -5,6 +5,7 @@ import { log } from "../logger.js";
 import { isBaseMintOnCooldown, isPoolOnCooldown, recallForPool, isTokenOnGlobalCooldown, getTokenLossCount } from "../pool-memory.js";
 import { confirmIndicatorPreset } from "./chart-indicators.js";
 import { discoverGmgnPools } from "./gmgn.js";
+import { buildMeteoraDiscoveryShadowFilters, normalizeMeteoraDiscoveryPool } from "./meteora-discovery-shadow.js";
 
 const DATAPI_JUP = "https://datapi.jup.ag/v1";
 
@@ -24,6 +25,71 @@ async function discoverMeteoraFallback(reason, page_size = 50) {
   discovery.filtered_examples = Array.isArray(discovery.filtered_examples) ? discovery.filtered_examples : [];
   discovery.filtered_examples.unshift({ stage: "gmgn", name: "GMGN", reason: `fallback to Meteora: ${reason}` });
   return discovery;
+}
+
+async function discoverMeteoraYunusPools({ page_size = 50 } = {}) {
+  if (process.env.MERIDIAN_PROFILE !== "autoresearch") {
+    throw new Error("screeningSource=meteora_yunus is restricted to MERIDIAN_PROFILE=autoresearch");
+  }
+
+  const opts = config.autoresearch?.meteoraDiscoveryShadow || {};
+  const filters = buildMeteoraDiscoveryShadowFilters(opts);
+  const params = new URLSearchParams({
+    page_size: String(page_size),
+    filter_by: filters,
+    timeframe: opts.timeframe || config.screening.timeframe || "1h",
+    category: opts.category || config.screening.category || "trending",
+  });
+  const url = `${POOL_DISCOVERY_BASE}/pools?${params.toString()}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Meteora Yunus discovery API error: ${res.status} ${res.statusText}`);
+  const data = await res.json();
+  const rawPools = Array.isArray(data?.data) ? data.data : [];
+  const filtered_examples = [];
+  const pools = [];
+
+  for (const raw of rawPools) {
+    const y = normalizeMeteoraDiscoveryPool(raw, opts);
+    if (!y.yunus_match) {
+      const failed = Object.entries(y.checks || {})
+        .filter(([, ok]) => !ok)
+        .map(([key]) => key)
+        .slice(0, 4)
+        .join(", ");
+      filtered_examples.push({ stage: "meteora_yunus", name: y.name || raw.name || "unknown", reason: failed || "yunus_match=false" });
+      continue;
+    }
+    pools.push({
+      ...condensePool(raw),
+      source_type: "meteora_yunus",
+      source_tags: ["meteora_yunus", "meteora"],
+      yunus_score: y.yunus_score,
+      yunus_score_max: y.yunus_score_max,
+      yunus_match: y.yunus_match,
+      yunus_price_trend_direction: y.price_trend_direction,
+      yunus_open_positions_ok: y.checks?.open_positions === true,
+      yunus_medium_volatility_ok: y.checks?.volatility_medium === true,
+    });
+  }
+
+  pools.sort((a, b) => {
+    const feeDiff = Number(b.fee_active_tvl_ratio || 0) - Number(a.fee_active_tvl_ratio || 0);
+    if (feeDiff !== 0) return feeDiff;
+    return Number(b.open_positions || 0) - Number(a.open_positions || 0);
+  });
+
+  return {
+    total: data?.total ?? rawPools.length,
+    pools,
+    filtered_examples,
+    source_meta: {
+      source: "meteora_yunus",
+      raw_returned: rawPools.length,
+      yunus_matches: pools.length,
+      timeframe: opts.timeframe || config.screening.timeframe || "1h",
+      category: opts.category || config.screening.category || "trending",
+    },
+  };
 }
 const PVP_MIN_ACTIVE_TVL = 5_000;
 const PVP_MIN_HOLDERS = 500;
@@ -374,8 +440,8 @@ export async function discoverPools({
 export async function getTopCandidates({ limit = 10 } = {}) {
   const { config } = await import("../config.js");
   const source = String(config.screening.source || "meteora").toLowerCase();
-  if (!["meteora", "gmgn", "hybrid"].includes(source)) {
-    throw new Error(`Invalid screeningSource: ${config.screening.source}. Use meteora, gmgn, or hybrid.`);
+  if (!["meteora", "gmgn", "hybrid", "meteora_yunus"].includes(source)) {
+    throw new Error(`Invalid screeningSource: ${config.screening.source}. Use meteora, gmgn, hybrid, or meteora_yunus.`);
   }
   const gmgnLimit = Math.max(limit, config.gmgn.enrichLimit || 20);
   let discovery;
@@ -412,6 +478,11 @@ export async function getTopCandidates({ limit = 10 } = {}) {
         filteredOut = [...discovery.filtered_examples];
       }
     }
+  } else if (source === "meteora_yunus") {
+    discovery = await discoverMeteoraYunusPools({ page_size: 50 });
+    pools = discovery.pools;
+    filteredOut = Array.isArray(discovery.filtered_examples) ? [...discovery.filtered_examples] : [];
+    log("screening", `meteora_yunus source: raw=${discovery.source_meta?.raw_returned ?? "?"}, matches=${discovery.source_meta?.yunus_matches ?? pools.length}`);
   } else if (source === "hybrid") {
     const meteoraDiscovery = await discoverPools({ page_size: 50 });
     let gmgnDiscovery = { total: 0, pools: [], filtered_examples: [{ stage: "gmgn", name: "GMGN", reason: "not attempted" }], stage_counts: null };
@@ -534,7 +605,7 @@ export async function getTopCandidates({ limit = 10 } = {}) {
 
   // Enrich with OKX data for pure Meteora candidates and hybrid Meteora/intersection candidates.
   // Pure GMGN candidates already carry much of this upstream.
-  if ((source === "meteora" || source === "hybrid") && eligible.length > 0) {
+  if ((source === "meteora" || source === "hybrid" || source === "meteora_yunus") && eligible.length > 0) {
     const { getAdvancedInfo, getPriceInfo, getClusterList, getRiskFlags } = await import("./okx.js");
     const okxResults = await Promise.allSettled(
       eligible.map(async (p) => {

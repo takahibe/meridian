@@ -54,7 +54,9 @@ Returns the top N eligible pools ranked by score (fee/TVL, organic, stability, v
 Each pool includes a score (0-100) and has already passed all hard disqualifiers.
 Use this instead of discover_pools for screening cycles. The active screening source is controlled by screeningSource:
 - meteora: legacy Meteora pool-discovery flow
-- gmgn: GMGN trending/security/holders/price-action first, then Meteora DLMM pool match.`,
+- gmgn: GMGN trending/security/holders/price-action first, then Meteora DLMM pool match
+- hybrid: merge Meteora and GMGN candidates
+- meteora_yunus: autoresearch-only Meteora Pool Discovery source using Yunus-style filters/scoring.`,
       parameters: {
         type: "object",
         properties: {
