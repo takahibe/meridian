@@ -45,6 +45,16 @@ function saveChatId(id) {
 
 loadChatId();
 
+export function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[ch]));
+}
+
 function isAuthorizedIncomingMessage(msg) {
   const incomingChatId = String(msg.chat?.id || "");
   const senderUserId = msg.from?.id != null ? String(msg.from.id) : null;
@@ -404,6 +414,9 @@ export function stopPolling() {
 // ─── Notification helpers ────────────────────────────────────────
 export async function notifyDeploy({ pair, amountSol, position, tx, priceRange, rangeCoverage, binStep, baseFee, why, band = null }) {
   // NEVER block deploy/close/swap notifications — these are critical events
+  const safePair = escapeHTML(pair || "?");
+  const safeAmountSol = escapeHTML(amountSol ?? 0);
+  const safeBand = escapeHTML(band || "");
   const priceStr = priceRange
     ? `Price range: ${priceRange.min < 0.0001 ? priceRange.min.toExponential(3) : priceRange.min.toFixed(6)} – ${priceRange.max < 0.0001 ? priceRange.max.toExponential(3) : priceRange.max.toFixed(6)}\n`
     : "";
@@ -411,9 +424,9 @@ export async function notifyDeploy({ pair, amountSol, position, tx, priceRange, 
     ? `Range cover: ${fmtPct(rangeCoverage.downside_pct)} downside | ${fmtPct(rangeCoverage.upside_pct)} upside | ${fmtPct(rangeCoverage.width_pct)} total\n`
     : "";
   const poolStr = (binStep || baseFee)
-    ? `Bin step: ${binStep ?? "?"}  |  Base fee: ${baseFee != null ? baseFee + "%" : "?"}\n`
+    ? `Bin step: ${escapeHTML(binStep ?? "?")}  |  Base fee: ${escapeHTML(baseFee != null ? baseFee + "%" : "?")}\n`
     : "";
-  const whyStr = why ? `Why: ${why}\n` : "";
+  const whyStr = why ? `Why: ${escapeHTML(why)}\n` : "";
 
   // Build visual range bar
   let visual = "";
@@ -431,60 +444,68 @@ export async function notifyDeploy({ pair, amountSol, position, tx, priceRange, 
   }
 
   await sendHTML(
-    `✅ <b>Deployed</b> ${pair}\n` +
-    `Amount: ${amountSol} SOL${band ? ` | Band ${band}` : ""}\n` +
+    `✅ <b>Deployed</b> ${safePair}\n` +
+    `Amount: ${safeAmountSol} SOL${band ? ` | Band ${safeBand}` : ""}\n` +
     priceStr +
     coverageStr +
     poolStr +
     whyStr +
-    `Position: <code>${position?.slice(0, 8)}...</code>\n` +
-    `Tx: <code>${tx?.slice(0, 16)}...</code>` +
+    `Position: <code>${escapeHTML(position?.slice(0, 8) || "?")}...</code>\n` +
+    `Tx: <code>${escapeHTML(tx?.slice(0, 16) || "?")}...</code>` +
     (visual ? `\n\n${visual}` : "")
+  );
+}
+
+export function formatCloseNotificationHTML({ pair, pnlUsd, pnlPct, autoSwapped, autoSwapFailed, solReceived, baseLabel, reason }) {
+  const pnlUsdNum = Number(pnlUsd ?? 0);
+  const pnlPctNum = Number(pnlPct ?? 0);
+  const safePnlUsd = Number.isFinite(pnlUsdNum) ? pnlUsdNum : 0;
+  const safePnlPct = Number.isFinite(pnlPctNum) ? pnlPctNum : 0;
+  const sign = safePnlUsd >= 0 ? "+" : "";
+  let swapLine = "";
+  if (autoSwapped) {
+    const solStr = Number.isFinite(Number(solReceived)) ? ` (+${Number(solReceived).toFixed(4)} SOL)` : "";
+    swapLine = `\n✅ Auto-swapped${baseLabel ? ` ${escapeHTML(baseLabel)}` : ""} → SOL${solStr}`;
+  } else if (autoSwapFailed) {
+    swapLine = `\n⚠️ Auto-swap FAILED${baseLabel ? ` for ${escapeHTML(baseLabel)}` : ""} — manual swap_token needed`;
+  }
+  const reasonLine = reason ? `\n↪ ${escapeHTML(reason)}` : "";
+  return (
+    `🔒 <b>Closed</b> ${escapeHTML(pair || "?")}\n` +
+    `PnL: ${sign}$${safePnlUsd.toFixed(2)} (${sign}${safePnlPct.toFixed(2)}%)${reasonLine}` +
+    swapLine
   );
 }
 
 export async function notifyClose({ pair, pnlUsd, pnlPct, autoSwapped, autoSwapFailed, solReceived, baseLabel, reason }) {
   // NEVER block deploy/close/swap notifications — these are critical events
-  const sign = pnlUsd >= 0 ? "+" : "";
-  let swapLine = "";
-  if (autoSwapped) {
-    const solStr = Number.isFinite(Number(solReceived)) ? ` (+${Number(solReceived).toFixed(4)} SOL)` : "";
-    swapLine = `\n✅ Auto-swapped${baseLabel ? ` ${baseLabel}` : ""} → SOL${solStr}`;
-  } else if (autoSwapFailed) {
-    swapLine = `\n⚠️ Auto-swap FAILED${baseLabel ? ` for ${baseLabel}` : ""} — manual swap_token needed`;
-  }
-  const reasonLine = reason ? `\n↪ ${reason}` : "";
-  await sendHTML(
-    `🔒 <b>Closed</b> ${pair}\n` +
-    `PnL: ${sign}$${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)${reasonLine}` +
-    swapLine
-  );
+  await sendHTML(formatCloseNotificationHTML({ pair, pnlUsd, pnlPct, autoSwapped, autoSwapFailed, solReceived, baseLabel, reason }));
 }
 
 export async function notifySwap({ inputSymbol, outputSymbol, amountIn, amountOut, tx }) {
   // NEVER block deploy/close/swap notifications — these are critical events
   await sendHTML(
-    `🔄 <b>Swapped</b> ${inputSymbol} → ${outputSymbol}\n` +
-    `In: ${amountIn ?? "?"} | Out: ${amountOut ?? "?"}\n` +
-    `Tx: <code>${tx?.slice(0, 16)}...</code>`
+    `🔄 <b>Swapped</b> ${escapeHTML(inputSymbol || "?")} → ${escapeHTML(outputSymbol || "?")}\n` +
+    `In: ${escapeHTML(amountIn ?? "?")} | Out: ${escapeHTML(amountOut ?? "?")}\n` +
+    `Tx: <code>${escapeHTML(tx?.slice(0, 16) || "?")}...</code>`
   );
 }
 
 export async function notifyOutOfRange({ pair, minutesOOR }) {
   if (hasActiveLiveMessage()) return;
   await sendHTML(
-    `⚠️ <b>Out of Range</b> ${pair}\n` +
-    `Been OOR for ${minutesOOR} minutes`
+    `⚠️ <b>Out of Range</b> ${escapeHTML(pair || "?")}\n` +
+    `Been OOR for ${escapeHTML(minutesOOR ?? "?")} minutes`
   );
 }
 
 export async function notifyXApiDegraded({ total = 0, unknown = 0, reasons = [], examples = [] } = {}) {
   if (hasActiveLiveMessage()) return;
-  const reasonLine = reasons.length ? `Reasons: ${reasons.join(", ")}\n` : "";
-  const sampleLine = examples.length ? `Examples: ${examples.join(", ")}` : "";
+  const reasonLine = reasons.length ? `Reasons: ${escapeHTML(reasons.join(", "))}\n` : "";
+  const sampleLine = examples.length ? `Examples: ${escapeHTML(examples.join(", "))}` : "";
   await sendHTML(
     `⚠️ <b>X API degraded during screening</b>\n` +
-    `Unknown narrative results: ${unknown}/${total}\n` +
+    `Unknown narrative results: ${escapeHTML(unknown)}/${escapeHTML(total)}\n` +
     reasonLine +
     sampleLine
   );
@@ -525,8 +546,8 @@ export function renderDeployVisual({ pair, amountSol, lowerPrice, upperPrice, ac
   const upperStr = upperPrice < 0.0001 ? upperPrice.toExponential(2) : upperPrice.toFixed(6);
   const bandEmoji = band === "A" ? "🟢" : band === "B" ? "🟡" : band === "C" ? "🔴" : "⚪";
   return (
-    `🚩 <b>${pair}</b>  ${bandEmoji} Band ${band || "?"}\n` +
-    `💰 ${amountSol} SOL  |  ⚙️ Bin ${binStep ?? "?"}  |  📉 Base ${baseFee != null ? baseFee + "%" : "?"}\n\n` +
+    `🚩 <b>${escapeHTML(pair || "?")}</b>  ${bandEmoji} Band ${escapeHTML(band || "?")}\n` +
+    `💰 ${escapeHTML(amountSol ?? "?")} SOL  |  ⚙️ Bin ${escapeHTML(binStep ?? "?")}  |  📉 Base ${escapeHTML(baseFee != null ? baseFee + "%" : "?")}\n\n` +
     `${lowerStr} ${bar} ${upperStr}\n` +
     `↑ Active price sits at ~${pct}% of range`
   );
