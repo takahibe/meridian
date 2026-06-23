@@ -1,0 +1,259 @@
+{
+  "run_id": "run-004",
+  "reviewed_at": "2026-06-23T10:23:37.601Z",
+  "classification": "exploratory_closed_no_promotion",
+  "promotion_status": "not_eligible_for_direct_promotion",
+  "operational_action": "stopped meridian-autoresearch after confirming 0 open positions",
+  "verdict": "DO_NOT_PROMOTE",
+  "reason": "Pct/USD records imply negative net SOL; exact pnl_sol/net_sol fields are missing, so SOL normalization remains approximate. Low tail loss was preserved, but deploy quality/EV did not improve.",
+  "compare": {
+    "main": {
+      "label": "main",
+      "closes": 541,
+      "pnl_basis": "pct",
+      "pnl_basis_counts": {
+        "pct": 541
+      },
+      "comparable_closes": 541,
+      "net_sol": 0,
+      "net_pnl": -24.01,
+      "avg_pnl": -0.0444,
+      "net_sol_per_deploy_unit": 0,
+      "net_pnl_per_deploy_unit": null,
+      "winrate": 0.62,
+      "winners": 333,
+      "losers": 200,
+      "avg_deploy_sol": 0.607,
+      "avg_hold_minutes": 59,
+      "oor_closes": 364,
+      "dump_closes": 94,
+      "tp_closes": 167,
+      "worst_close": -68.09,
+      "worst_close_sol": 0,
+      "last_close": "2026-06-23T10:03:17.269Z"
+    },
+    "autoresearch": {
+      "label": "autoresearch",
+      "closes": 18,
+      "pnl_basis": "pct",
+      "pnl_basis_counts": {
+        "pct": 18
+      },
+      "comparable_closes": 18,
+      "net_sol": 0,
+      "net_pnl": -1.77,
+      "avg_pnl": -0.0983,
+      "net_sol_per_deploy_unit": 0,
+      "net_pnl_per_deploy_unit": null,
+      "winrate": 0.44,
+      "winners": 8,
+      "losers": 9,
+      "avg_deploy_sol": 0.2,
+      "avg_hold_minutes": 29,
+      "oor_closes": 16,
+      "dump_closes": 1,
+      "tp_closes": 1,
+      "worst_close": -1.5,
+      "worst_close_sol": 0,
+      "last_close": "2026-06-23T09:20:46.266Z"
+    },
+    "decision": {
+      "verdict": "REVIEW",
+      "reason": "Autoresearch winrate 44% is computed from pct fallback because SOL PnL fields are missing. Do not promote automatically until records include pnl_sol/net_sol for normalized net SOL comparison."
+    }
+  },
+  "all18": {
+    "summary": {
+      "n": 18,
+      "w": 8,
+      "l": 9,
+      "flat": 1,
+      "pct": -1.77,
+      "deploy": 3.600000000000001,
+      "pnl_usd": -0.25,
+      "fees_usd": 0.1508,
+      "auto_swap_failed": 7,
+      "worst": -1.5,
+      "best": 0.92,
+      "avg_pct": -0.0983,
+      "est_sol": -0.00354,
+      "est_sol_per_deploy": -0.000983,
+      "pct_total": -1.77
+    },
+    "byPool": {
+      "FLKR-SOL": {
+        "n": 3,
+        "pct": -0.6199999999999999,
+        "w": 2,
+        "l": 1
+      },
+      "FRAG-SOL": {
+        "n": 3,
+        "pct": 0.8600000000000001,
+        "w": 2,
+        "l": 1
+      },
+      "WORLDCUP-SOL": {
+        "n": 1,
+        "pct": -0.1,
+        "w": 0,
+        "l": 1
+      },
+      "HermesWorld-SOL": {
+        "n": 1,
+        "pct": -0.17,
+        "w": 0,
+        "l": 1
+      },
+      "Daemon-SOL": {
+        "n": 3,
+        "pct": -0.19999999999999998,
+        "w": 1,
+        "l": 2
+      },
+      "drooling-SOL": {
+        "n": 3,
+        "pct": -1.55,
+        "w": 1,
+        "l": 2
+      },
+      "CONDOR-SOL": {
+        "n": 3,
+        "pct": 0.010000000000000009,
+        "w": 2,
+        "l": 1
+      },
+      "JTVO-SOL": {
+        "n": 1,
+        "pct": 0,
+        "w": 0,
+        "l": 0
+      }
+    },
+    "byReason": {
+      "Upper OOR close (Band B)": {
+        "n": 15,
+        "pct": -2.02,
+        "w": 6,
+        "l": 8
+      },
+      "Low yield": {
+        "n": 1,
+        "pct": -0.1,
+        "w": 0,
+        "l": 1
+      },
+      "Trailing TP (Band B)": {
+        "n": 1,
+        "pct": 0.34,
+        "w": 1,
+        "l": 0
+      },
+      "Upper OOR close (Band C)": {
+        "n": 1,
+        "pct": 0.01,
+        "w": 1,
+        "l": 0
+      }
+    },
+    "byFrag": {
+      "normal": {
+        "n": 10,
+        "pct": -1.78,
+        "w": 4,
+        "l": 5
+      },
+      "fast": {
+        "n": 8,
+        "pct": 0.010000000000000009,
+        "w": 4,
+        "l": 4
+      }
+    }
+  },
+  "last10": {
+    "summary": {
+      "n": 10,
+      "w": 5,
+      "l": 4,
+      "flat": 1,
+      "pct": -1.46,
+      "deploy": 1.9999999999999998,
+      "pnl_usd": -0.21,
+      "fees_usd": 0.0768,
+      "auto_swap_failed": 6,
+      "worst": -1.48,
+      "best": 0.34,
+      "avg_pct": -0.146,
+      "est_sol": -0.00292,
+      "est_sol_per_deploy": -0.00146,
+      "pct_total": -1.46
+    },
+    "byPool": {
+      "Daemon-SOL": {
+        "n": 2,
+        "pct": 0.010000000000000009,
+        "w": 1,
+        "l": 1
+      },
+      "FRAG-SOL": {
+        "n": 1,
+        "pct": 0.07,
+        "w": 1,
+        "l": 0
+      },
+      "drooling-SOL": {
+        "n": 3,
+        "pct": -1.55,
+        "w": 1,
+        "l": 2
+      },
+      "CONDOR-SOL": {
+        "n": 3,
+        "pct": 0.010000000000000009,
+        "w": 2,
+        "l": 1
+      },
+      "JTVO-SOL": {
+        "n": 1,
+        "pct": 0,
+        "w": 0,
+        "l": 0
+      }
+    },
+    "byReason": {
+      "Trailing TP (Band B)": {
+        "n": 1,
+        "pct": 0.34,
+        "w": 1,
+        "l": 0
+      },
+      "Upper OOR close (Band B)": {
+        "n": 8,
+        "pct": -1.81,
+        "w": 3,
+        "l": 4
+      },
+      "Upper OOR close (Band C)": {
+        "n": 1,
+        "pct": 0.01,
+        "w": 1,
+        "l": 0
+      }
+    },
+    "byFrag": {
+      "fast": {
+        "n": 6,
+        "pct": 0.28,
+        "w": 4,
+        "l": 2
+      },
+      "normal": {
+        "n": 4,
+        "pct": -1.74,
+        "w": 1,
+        "l": 2
+      }
+    }
+  }
+}

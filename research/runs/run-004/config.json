@@ -1,8 +1,8 @@
 {
   "run_id": "run-004",
   "mode": "live",
-  "classification": "controlled_experiment_clean_continuation",
-  "promotion_status": "not_eligible_until_10_closes_or_14_days_and_SOL_PnL_review",
+  "classification": "exploratory_closed_no_promotion",
+  "promotion_status": "not_eligible_for_direct_promotion",
   "hypothesis": "A clean-reset continuation of Meteora Pool Discovery with Yunus-style source filters/ranking as candidate source can preserve run-003 low-tail-loss behavior while improving deploy quality after removing accumulated run-003 local memory/evolved threshold contamination.",
   "control_variable": "candidate_source_ranking_clean_retest",
   "control_value_main": {
@@ -415,5 +415,13 @@
     "Profile lessons/state/pool-memory/decision-log/research-events/shadow-labels/signal-weights reset at run start.",
     "No live position existed at transition; PM2 and CLI both reported 0 open positions before reset.",
     "Do not tweak config mid-run; any change becomes run-005."
-  ]
+  ],
+  "reviewed_at": "2026-06-23T10:23:37.601Z",
+  "final_verdict": "DO_NOT_PROMOTE",
+  "final_reason": "Pct/USD records imply negative net SOL; exact pnl_sol/net_sol fields are missing, so SOL normalization remains approximate. Low tail loss was preserved, but deploy quality/EV did not improve.",
+  "final_review_files": {
+    "json": "manual-sol-pnl-review-20260623_102336.json",
+    "md": "manual-sol-pnl-review-20260623_102336.md",
+    "compare": "final-compare-review-20260623_102336.json"
+  }
 }

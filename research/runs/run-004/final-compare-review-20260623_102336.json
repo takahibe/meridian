@@ -1,0 +1,56 @@
+{
+  "main": {
+    "label": "main",
+    "closes": 541,
+    "pnl_basis": "pct",
+    "pnl_basis_counts": {
+      "pct": 541
+    },
+    "comparable_closes": 541,
+    "net_sol": 0,
+    "net_pnl": -24.01,
+    "avg_pnl": -0.0444,
+    "net_sol_per_deploy_unit": 0,
+    "net_pnl_per_deploy_unit": null,
+    "winrate": 0.62,
+    "winners": 333,
+    "losers": 200,
+    "avg_deploy_sol": 0.607,
+    "avg_hold_minutes": 59,
+    "oor_closes": 364,
+    "dump_closes": 94,
+    "tp_closes": 167,
+    "worst_close": -68.09,
+    "worst_close_sol": 0,
+    "last_close": "2026-06-23T10:03:17.269Z"
+  },
+  "autoresearch": {
+    "label": "autoresearch",
+    "closes": 18,
+    "pnl_basis": "pct",
+    "pnl_basis_counts": {
+      "pct": 18
+    },
+    "comparable_closes": 18,
+    "net_sol": 0,
+    "net_pnl": -1.77,
+    "avg_pnl": -0.0983,
+    "net_sol_per_deploy_unit": 0,
+    "net_pnl_per_deploy_unit": null,
+    "winrate": 0.44,
+    "winners": 8,
+    "losers": 9,
+    "avg_deploy_sol": 0.2,
+    "avg_hold_minutes": 29,
+    "oor_closes": 16,
+    "dump_closes": 1,
+    "tp_closes": 1,
+    "worst_close": -1.5,
+    "worst_close_sol": 0,
+    "last_close": "2026-06-23T09:20:46.266Z"
+  },
+  "decision": {
+    "verdict": "REVIEW",
+    "reason": "Autoresearch winrate 44% is computed from pct fallback because SOL PnL fields are missing. Do not promote automatically until records include pnl_sol/net_sol for normalized net SOL comparison."
+  }
+}
