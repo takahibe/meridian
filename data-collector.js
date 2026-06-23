@@ -215,6 +215,8 @@ export function recordShadowLabel(perf = {}) {
       base_mint: perf.base_mint ?? perf.signal_snapshot?.base_mint ?? null,
       pnl_pct: finiteOrNull(perf.pnl_pct),
       pnl_usd: finiteOrNull(perf.pnl_usd),
+      pnl_sol: finiteOrNull(perf.pnl_sol ?? perf.net_sol),
+      pnl_sol_pct: finiteOrNull(perf.pnl_sol_pct),
       minutes_held: finiteOrNull(perf.minutes_held),
       range_efficiency: finiteOrNull(perf.range_efficiency),
       close_reason: shortText(perf.close_reason),

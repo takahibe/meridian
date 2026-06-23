@@ -1442,6 +1442,28 @@ function getClosedPnlPct(posEntry, solMode = false) {
   return deposit && deposit > 0 ? (pnl / deposit) * 100 : 0;
 }
 
+function parseClosedPnlFields(posEntry, { solMode = false, fallbackFeesUsd = 0 } = {}) {
+  const pnlTrueUsd = safeNum(posEntry?.pnlUsd);
+  const pnlSol = maybeNum(posEntry?.pnlSol) ?? maybeNum(posEntry?.pnl?.valueNative);
+  const pnlUsdForMode = solMode ? (pnlSol ?? 0) : pnlTrueUsd;
+  const pnlPct = getClosedPnlPct(posEntry, solMode);
+  const pnlSolPct = maybeNum(posEntry?.pnlSolPctChange) ?? maybeNum(posEntry?.pnl?.percentNative);
+
+  return {
+    pnlUsd: pnlUsdForMode,
+    pnlTrueUsd,
+    pnlSol,
+    pnlPct,
+    pnlSolPct,
+    finalValueUsd: safeNum(posEntry?.allTimeWithdrawals?.total?.usd),
+    initialUsd: safeNum(posEntry?.allTimeDeposits?.total?.usd),
+    feesUsd: maybeNum(posEntry?.allTimeFees?.total?.usd) ?? fallbackFeesUsd,
+    finalValueSol: maybeNum(posEntry?.allTimeWithdrawals?.total?.sol),
+    initialSol: maybeNum(posEntry?.allTimeDeposits?.total?.sol),
+    feesSol: maybeNum(posEntry?.allTimeFees?.total?.sol),
+  };
+}
+
 function deriveOpenPnlPct(binData, solMode = false) {
   if (!binData) return null;
 
@@ -2002,8 +2024,13 @@ export async function closePosition({ position_address, reason, emergency = fals
           let pnlUsd = 0;
           let pnlTrueUsd = 0;
           let pnlPct = 0;
+          let pnlSol = null;
+          let pnlSolPct = null;
           let finalValueUsd = 0;
           let initialUsd = 0;
+          let finalValueSol = null;
+          let initialSol = null;
+          let feesSol = null;
           let feesUsd = tracked.total_fees_claimed_usd || 0;
           try {
             const closedUrl = `https://dlmm.datapi.meteora.ag/positions/${poolAddress}/pnl?user=${wallet.publicKey.toString()}&status=closed&pageSize=50&page=1`;
@@ -2013,12 +2040,22 @@ export async function closePosition({ position_address, reason, emergency = fals
                 const data = await res.json();
                 const posEntry = (data.positions || []).find((entry) => entry.positionAddress === position_address);
                 if (posEntry) {
-                  pnlTrueUsd = safeNum(posEntry.pnlUsd);
-                  pnlUsd = config.management.solMode ? getClosedPnlValue(posEntry, true) : pnlTrueUsd;
-                  pnlPct = getClosedPnlPct(posEntry, config.management.solMode);
-                  finalValueUsd = parseFloat(posEntry.allTimeWithdrawals?.total?.usd || 0);
-                  initialUsd = parseFloat(posEntry.allTimeDeposits?.total?.usd || 0);
-                  feesUsd = parseFloat(posEntry.allTimeFees?.total?.usd || 0) || feesUsd;
+                  const parsed = parseClosedPnlFields(posEntry, {
+                    solMode: config.management.solMode,
+                    fallbackFeesUsd: feesUsd,
+                  });
+                  pnlTrueUsd = parsed.pnlTrueUsd;
+                  pnlUsd = parsed.pnlUsd;
+                  pnlPct = parsed.pnlPct;
+                  pnlSol = parsed.pnlSol;
+                  pnlSolPct = parsed.pnlSolPct;
+                  finalValueUsd = parsed.finalValueUsd;
+                  initialUsd = parsed.initialUsd;
+                  feesUsd = parsed.feesUsd;
+                  finalValueSol = parsed.finalValueSol;
+                  initialSol = parsed.initialSol;
+                  feesSol = parsed.feesSol;
+                  log("close", `Relay closed PnL from API: pnl=${pnlUsd.toFixed(6)} ${config.management.solMode ? "SOL" : "USD"} (${pnlPct.toFixed(2)}%), pnl_sol=${pnlSol == null ? "n/a" : pnlSol.toFixed(9)}`);
                   break;
                 }
               }
@@ -2048,8 +2085,13 @@ export async function closePosition({ position_address, reason, emergency = fals
             organic_score: tracked.organic_score || null,
             amount_sol: tracked.amount_sol,
             fees_earned_usd: feesUsd,
+            fees_earned_sol: feesSol,
             final_value_usd: finalValueUsd,
             initial_value_usd: initialUsd,
+            final_value_sol: finalValueSol,
+            initial_value_sol: initialSol,
+            pnl_sol: pnlSol,
+            pnl_sol_pct: pnlSolPct,
             minutes_in_range: minutesHeld - minutesOOR,
             minutes_held: minutesHeld,
             close_reason: reason || "agent decision",
@@ -2070,8 +2112,12 @@ export async function closePosition({ position_address, reason, emergency = fals
             ].filter(Boolean),
             metrics: {
               pnl_usd: pnlUsd,
+              pnl_true_usd: pnlTrueUsd,
+              pnl_sol: pnlSol,
               pnl_pct: pnlPct,
+              pnl_sol_pct: pnlSolPct,
               fees_usd: feesUsd,
+              fees_sol: feesSol,
               minutes_held: minutesHeld,
             },
           });
@@ -2087,7 +2133,11 @@ export async function closePosition({ position_address, reason, emergency = fals
             close_txs: closeTxHashes,
             txs: txHashes,
             pnl_usd: pnlUsd,
+            pnl_true_usd: pnlTrueUsd,
+            pnl_sol: pnlSol,
+            net_sol: pnlSol,
             pnl_pct: pnlPct,
+            pnl_sol_pct: pnlSolPct,
             base_mint: closeBaseMint,
           };
         }
@@ -2275,8 +2325,13 @@ export async function closePosition({ position_address, reason, emergency = fals
       let pnlUsd = 0;
       let pnlTrueUsd = 0;
       let pnlPct = 0;
+      let pnlSol = null;
+      let pnlSolPct = null;
       let finalValueUsd = 0;
       let initialUsd = 0;
+      let finalValueSol = null;
+      let initialSol = null;
+      let feesSol = null;
       let feesUsd = tracked.total_fees_claimed_usd || 0;
       try {
         const closedUrl = `https://dlmm.datapi.meteora.ag/positions/${poolAddress}/pnl?user=${wallet.publicKey.toString()}&status=closed&pageSize=50&page=1`;
@@ -2286,12 +2341,13 @@ export async function closePosition({ position_address, reason, emergency = fals
             const data = await res.json();
             const posEntry = (data.positions || []).find(p => p.positionAddress === position_address);
             if (posEntry) {
-              const nextPnlUsd = safeNum(posEntry.pnlUsd);
-              const nextPnlValue = config.management.solMode ? getClosedPnlValue(posEntry, true) : nextPnlUsd;
-              const nextPnlPct = getClosedPnlPct(posEntry, config.management.solMode);
-              const nextFinalValueUsd = parseFloat(posEntry.allTimeWithdrawals?.total?.usd || 0);
-              const nextInitialUsd = parseFloat(posEntry.allTimeDeposits?.total?.usd || 0);
-              const nextFeesUsd = parseFloat(posEntry.allTimeFees?.total?.usd || 0) || feesUsd;
+              const parsed = parseClosedPnlFields(posEntry, {
+                solMode: config.management.solMode,
+                fallbackFeesUsd: feesUsd,
+              });
+              const nextPnlUsd = parsed.pnlTrueUsd;
+              const nextPnlValue = parsed.pnlUsd;
+              const nextPnlPct = parsed.pnlPct;
 
               if (shouldRejectClosedPnl(nextPnlPct, reason || tracked?.close_reason)) {
                 log("close_warn", `Rejected unsettled closed PnL for ${position_address.slice(0, 8)} on attempt ${attempt + 1}/6: ${nextPnlPct.toFixed(2)}%`);
@@ -2299,10 +2355,15 @@ export async function closePosition({ position_address, reason, emergency = fals
                 pnlTrueUsd    = nextPnlUsd;
                 pnlUsd        = nextPnlValue;
                 pnlPct        = nextPnlPct;
-                finalValueUsd = nextFinalValueUsd;
-                initialUsd    = nextInitialUsd;
-                feesUsd       = nextFeesUsd;
-                log("close", `Closed PnL from API: pnl=${pnlUsd.toFixed(2)} ${config.management.solMode ? "SOL" : "USD"} (${pnlPct.toFixed(2)}%), withdrawn=${finalValueUsd.toFixed(2)} USD, deposited=${initialUsd.toFixed(2)} USD`);
+                pnlSol        = parsed.pnlSol;
+                pnlSolPct     = parsed.pnlSolPct;
+                finalValueUsd = parsed.finalValueUsd;
+                initialUsd    = parsed.initialUsd;
+                feesUsd       = parsed.feesUsd;
+                finalValueSol = parsed.finalValueSol;
+                initialSol    = parsed.initialSol;
+                feesSol       = parsed.feesSol;
+                log("close", `Closed PnL from API: pnl=${pnlUsd.toFixed(6)} ${config.management.solMode ? "SOL" : "USD"} (${pnlPct.toFixed(2)}%), pnl_sol=${pnlSol == null ? "n/a" : pnlSol.toFixed(9)}, withdrawn=${finalValueUsd.toFixed(2)} USD, deposited=${initialUsd.toFixed(2)} USD`);
                 break;
               }
             } else {
@@ -2355,8 +2416,13 @@ export async function closePosition({ position_address, reason, emergency = fals
         organic_score: tracked.organic_score || null,
         amount_sol: tracked.amount_sol,
         fees_earned_usd: feesUsd,
+        fees_earned_sol: feesSol,
         final_value_usd: finalValueUsd,
         initial_value_usd: initialUsd,
+        final_value_sol: finalValueSol,
+        initial_value_sol: initialSol,
+        pnl_sol: pnlSol,
+        pnl_sol_pct: pnlSolPct,
         minutes_in_range: minutesHeld - minutesOOR,
         minutes_held: minutesHeld,
         close_reason: reason || "agent decision",
@@ -2377,8 +2443,12 @@ export async function closePosition({ position_address, reason, emergency = fals
         ].filter(Boolean),
         metrics: {
           pnl_usd: pnlUsd,
+          pnl_true_usd: pnlTrueUsd,
+          pnl_sol: pnlSol,
           pnl_pct: pnlPct,
+          pnl_sol_pct: pnlSolPct,
           fees_usd: feesUsd,
+          fees_sol: feesSol,
           minutes_held: minutesHeld,
         },
       });
@@ -2392,7 +2462,11 @@ export async function closePosition({ position_address, reason, emergency = fals
         close_txs: closeTxHashes,
         txs: txHashes,
         pnl_usd: pnlUsd,
+        pnl_true_usd: pnlTrueUsd,
+        pnl_sol: pnlSol,
+        net_sol: pnlSol,
         pnl_pct: pnlPct,
+        pnl_sol_pct: pnlSolPct,
         base_mint: closeBaseMint,
       };
     }

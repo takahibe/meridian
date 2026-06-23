@@ -106,6 +106,49 @@ function buildSignalSnapshot(perf) {
   return Object.values(snapshot).some((value) => value != null) ? snapshot : null;
 }
 
+function finiteNumber(value) {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function roundMaybe(value, decimals = 6) {
+  const n = finiteNumber(value);
+  if (n == null) return null;
+  const factor = 10 ** decimals;
+  return Math.round(n * factor) / factor;
+}
+
+function buildSolPnlFields(perf) {
+  const initialSol = finiteNumber(perf.initial_value_sol ?? perf.initial_sol);
+  const finalSol = finiteNumber(perf.final_value_sol ?? perf.withdrawn_sol ?? perf.final_sol);
+  const feesSol = finiteNumber(perf.fees_earned_sol ?? perf.fee_earned_sol);
+  const explicitPnlSol = finiteNumber(perf.pnl_sol ?? perf.net_sol);
+  const explicitPnlSolPct = finiteNumber(perf.pnl_sol_pct ?? perf.pnl_pct_sol);
+
+  const hasSolComponents = initialSol != null && finalSol != null && feesSol != null;
+  const pnlSol = hasSolComponents
+    ? (finalSol + feesSol) - initialSol
+    : explicitPnlSol;
+  const pnlSolPct = initialSol != null && initialSol > 0 && pnlSol != null
+    ? (pnlSol / initialSol) * 100
+    : explicitPnlSolPct;
+
+  const fields = {};
+  if (initialSol != null) fields.initial_value_sol = roundMaybe(initialSol, 9);
+  if (finalSol != null) fields.final_value_sol = roundMaybe(finalSol, 9);
+  if (feesSol != null) fields.fees_earned_sol = roundMaybe(feesSol, 9);
+  if (pnlSol != null) {
+    fields.pnl_sol = roundMaybe(pnlSol, 9);
+    // Alias used by research-compare.js. At position level this is realized SOL
+    // PnL from Meteora deposits/withdrawals/fees; gas is accounted separately.
+    fields.net_sol = roundMaybe(pnlSol, 9);
+    fields.pnl_basis = "sol";
+  }
+  if (pnlSolPct != null) fields.pnl_sol_pct = roundMaybe(pnlSolPct, 6);
+  return fields;
+}
+
 // ─── Record Position Performance ──────────────────────────────
 
 /**
@@ -123,9 +166,12 @@ function buildSignalSnapshot(perf) {
  * @param {number} perf.fee_tvl_ratio  - fee/TVL ratio at deploy time
  * @param {number} perf.organic_score  - Token organic score at deploy time
  * @param {number} perf.amount_sol     - Amount deployed
- * @param {number} perf.fees_earned_usd - Total fees earned
- * @param {number} perf.final_value_usd - Value when closed
- * @param {number} perf.initial_value_usd - Value when opened
+ * @param {number} perf.fees_earned_usd - Total fees earned (USD)
+ * @param {number} perf.fees_earned_sol - Total fees earned (SOL), from closed Meteora PnL when available
+ * @param {number} perf.final_value_usd - Value when closed (USD withdrawals)
+ * @param {number} perf.initial_value_usd - Value when opened (USD deposits)
+ * @param {number} perf.final_value_sol - SOL withdrawn when closed, from closed Meteora PnL when available
+ * @param {number} perf.initial_value_sol - SOL deposited when opened, from closed Meteora PnL when available
  * @param {number} perf.minutes_in_range  - Total minutes position was in range
  * @param {number} perf.minutes_held      - Total minutes position was held
  * @param {string} perf.close_reason   - Why it was closed
@@ -178,6 +224,7 @@ export async function recordPerformance(perf) {
 
   const entry = {
     ...perf,
+    ...buildSolPnlFields(perf),
     signal_snapshot: signalSnapshot,
     screening_band: screeningBand,
     pnl_usd: Math.round(pnl_usd * 100) / 100,
@@ -211,10 +258,13 @@ export async function recordPerformance(perf) {
       closed_at: entry.recorded_at,
       pnl_pct: entry.pnl_pct,
       pnl_usd: entry.pnl_usd,
+      pnl_sol: entry.pnl_sol,
+      net_sol: entry.net_sol,
+      pnl_sol_pct: entry.pnl_sol_pct,
       range_efficiency: entry.range_efficiency,
       minutes_held: perf.minutes_held,
       fees_earned_usd: perf.fees_earned_usd,
-      fees_earned_sol: perf.fees_earned_sol,
+      fees_earned_sol: entry.fees_earned_sol,
       fee_earned_pct: perf.initial_value_usd > 0 ? ((perf.fees_earned_usd || 0) / perf.initial_value_usd) * 100 : null,
       close_reason: perf.close_reason,
       strategy: perf.strategy,
