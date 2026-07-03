@@ -116,6 +116,8 @@ const timers = {
   screeningLastRun: null,
 };
 
+const IS_AUTORESEARCH_PROFILE = process.env.MERIDIAN_PROFILE === "autoresearch";
+
 function nextRunIn(lastRun, intervalMin) {
   if (!lastRun) return intervalMin * 60;
   const elapsed = (Date.now() - lastRun) / 1000;
@@ -3025,21 +3027,61 @@ async function telegramHandler(msg) {
     return;
   }
 
-  if (text === "/pause") {
+  if (text === "/ar_pause") {
+    if (!IS_AUTORESEARCH_PROFILE) return;
+    log("control", "[autoresearch] Received /ar_pause from Telegram — pausing autonomous cycles");
     stopCronJobs();
     cronStarted = false;
-    await sendMessage("⏸ Paused autonomous cycles. Telegram control still works. Use /resume to start again.").catch(() => {});
+    log("control", "[autoresearch] Autonomous cycles paused");
+    await sendMessage("⏸ Autoresearch autonomous cycles paused. Use /ar_resume to start again.").catch(() => {});
     return;
   }
 
-  if (text === "/resume") {
+  if (text === "/ar_resume") {
+    if (!IS_AUTORESEARCH_PROFILE) return;
+    log("control", "[autoresearch] Received /ar_resume from Telegram — resuming autonomous cycles");
     if (!cronStarted) {
       cronStarted = true;
       timers.managementLastRun = Date.now();
       timers.screeningLastRun = Date.now();
       startCronJobs();
+      log("control", "[autoresearch] Autonomous cycles resumed");
+      await sendMessage("▶️ Autoresearch autonomous cycles resumed.").catch(() => {});
+    } else {
+      log("control", "[autoresearch] /ar_resume ignored — autonomous cycles already running");
+      await sendMessage("Autoresearch autonomous cycles are already running.").catch(() => {});
+    }
+    return;
+  }
+
+  if (text === "/pause") {
+    if (IS_AUTORESEARCH_PROFILE) {
+      log("control", "[autoresearch] Ignored bare /pause from shared Telegram control. Use /ar_pause for autoresearch.");
+      return;
+    }
+    log("control", "Received /pause from Telegram — pausing autonomous cycles");
+    stopCronJobs();
+    cronStarted = false;
+    log("control", "Autonomous cycles paused");
+    await sendMessage("⏸ Paused autonomous cycles. Telegram control still works. Use /resume to start again.").catch(() => {});
+    return;
+  }
+
+  if (text === "/resume") {
+    if (IS_AUTORESEARCH_PROFILE) {
+      log("control", "[autoresearch] Ignored bare /resume from shared Telegram control. Use /ar_resume for autoresearch.");
+      return;
+    }
+    log("control", "Received /resume from Telegram — resuming autonomous cycles");
+    if (!cronStarted) {
+      cronStarted = true;
+      timers.managementLastRun = Date.now();
+      timers.screeningLastRun = Date.now();
+      startCronJobs();
+      log("control", "Autonomous cycles resumed");
       await sendMessage("▶️ Autonomous cycles resumed.").catch(() => {});
     } else {
+      log("control", "/resume ignored — autonomous cycles already running");
       await sendMessage("Autonomous cycles are already running.").catch(() => {});
     }
     return;
