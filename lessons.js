@@ -274,13 +274,18 @@ export async function recordPerformance(perf) {
     });
   }
 
-  // Evolve thresholds every 5 closed positions
+  // Evolve thresholds every 5 closed positions unless an autoresearch run
+  // explicitly freezes threshold mutation for a clean one-variable experiment.
   if (data.performance.length % MIN_EVOLVE_POSITIONS === 0) {
     const { config, reloadScreeningThresholds } = await import("./config.js");
-    const result = evolveThresholds(data.performance, config);
-    if (result?.changes && Object.keys(result.changes).length > 0) {
-      reloadScreeningThresholds();
-      log("evolve", `Auto-evolved thresholds: ${JSON.stringify(result.changes)}`);
+    if (config.autoresearch?.thresholdEvolutionEnabled !== false) {
+      const result = evolveThresholds(data.performance, config);
+      if (result?.changes && Object.keys(result.changes).length > 0) {
+        reloadScreeningThresholds();
+        log("evolve", `Auto-evolved thresholds: ${JSON.stringify(result.changes)}`);
+      }
+    } else {
+      log("evolve", "Threshold evolution skipped: autoresearch.thresholdEvolutionEnabled=false");
     }
 
     // Darwinian signal weight recalculation

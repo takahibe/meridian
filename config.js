@@ -373,6 +373,7 @@ export const config = {
     candidateConfigPath: u.autoresearch?.candidateConfigPath ?? null,
     dataCollectorEnabled: u.autoresearch?.dataCollectorEnabled ?? true,
     shadowLabelsEnabled:  u.autoresearch?.shadowLabelsEnabled  ?? true,
+    thresholdEvolutionEnabled: u.autoresearch?.thresholdEvolutionEnabled ?? u.thresholdEvolutionEnabled ?? true,
     meteoraDiscoveryShadowEnabled: u.autoresearch?.meteoraDiscoveryShadowEnabled ?? false,
     meteoraDiscoveryShadow: {
       pageSize: u.autoresearch?.meteoraDiscoveryShadow?.pageSize ?? 50,

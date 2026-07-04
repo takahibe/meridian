@@ -1,0 +1,134 @@
+{
+  "run_id": "run-007",
+  "archived_at": "2026-07-04T17:28:27.863427Z",
+  "archive_dir": "/root/meridian/research/runs/run-007/final-pre-run008-20260704_172827",
+  "checkpoint_dir": "/root/meridian/checkpoints/autoresearch-pre-run008-20260704_172827",
+  "closed_count": 55,
+  "open_positions_at_archive": 0,
+  "net_sol_position_level": 0.037631193,
+  "winrate": 0.6545,
+  "winners": 36,
+  "losers": 17,
+  "flats": 2,
+  "gross_win_sol": 0.102753179,
+  "gross_loss_sol": -0.065121986,
+  "profit_factor": 1.5779,
+  "best_close_sol": 0.016136771,
+  "worst_close_sol": -0.035809298,
+  "first_close": "2026-06-29T13:17:32.338Z",
+  "last_close": "2026-07-04T15:24:00.409Z",
+  "top_close_reasons": [
+    [
+      "Upper OOR close (Band B)",
+      25
+    ],
+    [
+      "Trailing TP (Band B)",
+      11
+    ],
+    [
+      "Low yield",
+      5
+    ],
+    [
+      "Upper OOR close (Band C)",
+      5
+    ],
+    [
+      "Protective close (Band B)",
+      3
+    ],
+    [
+      "emergency pnl -100.0%",
+      2
+    ],
+    [
+      "Harvest close (Band B)",
+      2
+    ],
+    [
+      "Trailing TP (Band C)",
+      1
+    ],
+    [
+      "Out of range (lower) for 30m (limit",
+      1
+    ]
+  ],
+  "top_pools": [
+    [
+      "RTM-SOL",
+      6
+    ],
+    [
+      "yep-SOL",
+      6
+    ],
+    [
+      "Potato-SOL",
+      5
+    ],
+    [
+      "CATWIF-SOL",
+      4
+    ],
+    [
+      "world-SOL",
+      4
+    ],
+    [
+      "traindog-SOL",
+      3
+    ],
+    [
+      "WORLDCUP-SOL",
+      3
+    ],
+    [
+      "NYAN-SOL",
+      3
+    ],
+    [
+      "FABLE-SOL",
+      3
+    ],
+    [
+      "WYNN-SOL",
+      2
+    ],
+    [
+      "Bepe-SOL",
+      2
+    ],
+    [
+      "RKC-SOL",
+      2
+    ]
+  ],
+  "classification": "profitable_exploratory_adaptive_fee_quality_run_not_direct_promotion",
+  "contamination_note": "run-007 intended minFeeActiveTvlRatio=0.24, but lessons.js evolveThresholds mutated it to 0.29 at 20 closes and 0.30 at 25 closes despite darwinEnabled=false.",
+  "next_action": "start run-008 as clean fixed minFeeActiveTvlRatio=0.30 confirmation run with threshold evolution disabled for autoresearch.",
+  "phase_summaries": {
+    "0.24_initial": {
+      "n": 20,
+      "net_sol": -0.007625781,
+      "winrate": 0.65,
+      "worst": -0.021612445,
+      "best": 0.0095316
+    },
+    "0.29_transitional": {
+      "n": 5,
+      "net_sol": 0.015843818,
+      "winrate": 1.0,
+      "worst": 2.901e-06,
+      "best": 0.008289004
+    },
+    "0.30_evolved": {
+      "n": 30,
+      "net_sol": 0.029413156,
+      "winrate": 0.6,
+      "worst": -0.035809298,
+      "best": 0.016136771
+    }
+  }
+}
