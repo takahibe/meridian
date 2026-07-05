@@ -2763,6 +2763,53 @@ async function telegramHandler(msg) {
   const text = msg?.text?.trim();
   if (!text) return;
 
+  if (IS_AUTORESEARCH_PROFILE) {
+    if (text === "/ar_pause") {
+      log("control", "[autoresearch] Received /ar_pause from Telegram — pausing autonomous cycles");
+      stopCronJobs();
+      cronStarted = false;
+      log("control", "[autoresearch] Autonomous cycles paused");
+      await sendMessage("⏸ Autoresearch autonomous cycles paused. Use /ar_resume to start again.").catch(() => {});
+      return;
+    }
+
+    if (text === "/ar_resume") {
+      log("control", "[autoresearch] Received /ar_resume from Telegram — resuming autonomous cycles");
+      if (!cronStarted) {
+        cronStarted = true;
+        timers.managementLastRun = Date.now();
+        timers.screeningLastRun = Date.now();
+        startCronJobs();
+        log("control", "[autoresearch] Autonomous cycles resumed");
+        await sendMessage("▶️ Autoresearch autonomous cycles resumed.").catch(() => {});
+      } else {
+        log("control", "[autoresearch] /ar_resume ignored — autonomous cycles already running");
+        await sendMessage("Autoresearch autonomous cycles are already running.").catch(() => {});
+      }
+      return;
+    }
+
+    if (text === "/ar_status") {
+      try {
+        const [wallet, positions] = await Promise.all([getWalletBalances(), getMyPositions({ force: true })]);
+        await sendMessage([
+          `Autoresearch ${config.autoresearch?.runId || "(no run)"}`,
+          `Cycles: ${cronStarted ? "running" : "paused"}`,
+          `Wallet SOL: ${wallet?.sol ?? "?"}`,
+          `Open positions: ${positions?.total_positions ?? "?"}`,
+          `Fee/TVL floor: ${config.screening.minFeeActiveTvlRatio}`,
+          `Threshold evolution: ${config.autoresearch?.thresholdEvolutionEnabled === false ? "frozen" : "enabled"}`,
+        ].join("\n")).catch(() => {});
+      } catch (e) {
+        await sendMessage(`Autoresearch status error: ${e.message}`).catch(() => {});
+      }
+      return;
+    }
+
+    log("control", `[autoresearch] Ignored shared Telegram input: ${text.slice(0, 80)}`);
+    return;
+  }
+
   if (_pendingInput && !msg.isCallback && !text.startsWith("/")) {
     const { key, page, menuMsgId } = _pendingInput;
     _pendingInput = null;
